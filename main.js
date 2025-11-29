@@ -25,13 +25,13 @@ scene.add(peachGroup);
 // Setup lighting
 setupLighting(scene);
 
+// Initialize interaction system (pass scene for particle effects)
+initInteraction(peachGroup, camera, scene);
+
 // Load the peach model
 loadPeachModel(peachGroup, (meshes) => {
     setPeachMesh(meshes);
 });
-
-// Initialize interaction system
-initInteraction(peachGroup, camera);
 
 // Setup window resize handler
 setupResizeHandler(camera, renderer, backgroundMaterial);
