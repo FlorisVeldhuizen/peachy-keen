@@ -191,7 +191,7 @@ export class SoftBodyPhysics {
         // This creates the initial jiggle from the smack
         
         this.isActive = true;
-        this.activityTimer = 3.5; // Stay active for 3.5 seconds (extended to allow for longer transition)
+        this.activityTimer = 1.5; // Stay active for 1.5 seconds (2.5x faster)
         this.frameCount = 0; // Reset frame count
         
         // Transform world space to local space (reuse temp vectors)
@@ -244,7 +244,7 @@ export class SoftBodyPhysics {
         this.activityTimer -= delta;
         
         // Gradually increase damping as we approach timeout for smooth settle
-        const fadeOutTime = 1.0; // Start fading out in the last 1.0 seconds (extended)
+        const fadeOutTime = 0.5; // Start fading out in the last 0.5 seconds (2.5x faster)
         let dampingMultiplier = 1.0;
         if (this.activityTimer < fadeOutTime) {
             // Smoothly increase damping to help settle naturally
@@ -252,28 +252,38 @@ export class SoftBodyPhysics {
         }
         
         // Smoothly lerp vertices back to original over a longer period
-        const lerpStartTime = 1.0; // Start lerping in the last 1.0 seconds (extended and synchronized)
+        const lerpStartTime = 1.2; // Start lerping in the last 1.2 seconds (2.5x faster)
         let lerpAmount = 0;
         if (this.activityTimer < lerpStartTime) {
             // Gradually increase lerp from 0 to 1 as we approach the end
-            // Use easeInOut curve for smoother transition
+            // Use easeInOut curve for smoother transition  
             let t = 1.0 - (this.activityTimer / lerpStartTime);
             t = Math.min(t, 1.0);
+            t = Math.max(t, 0.0);
             // Ease in-out: smooth at both ends
             lerpAmount = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+        
+        // Force lerpAmount to exactly 1.0 when timer is very close to or past 0
+        if (this.activityTimer <= 0.02) {
+            lerpAmount = 1.0;
+        }
+        
+        // Deactivate when timer fully expires
+        if (this.activityTimer <= 0) {
+            // At this point, lerp should be exactly 1.0 and vertices should be at original
+            // Zero out velocities and deactivate (positions are already correct from lerp)
+            for (let i = 0; i < this.vertexVelocities.length; i++) {
+                this.vertexVelocities[i].set(0, 0, 0);
+                this.vertexForces[i].set(0, 0, 0);
+            }
+            this.isActive = false;
+            return;
         }
         
         // Check if motion has actually settled
         const maxVelocity = this.getMaxVelocity();
         const maxDisplacement = this.getMaxDisplacement();
-        
-        if (this.activityTimer <= 0) {
-            // Timer expired - deactivate regardless of motion (it should be minimal by now)
-            this.isActive = false;
-            // Ensure we're exactly at original positions
-            this.resetToOriginalImmediate();
-            return;
-        }
         
         this.frameCount++;
         const positions = this.geometry.attributes.position;
@@ -385,6 +395,8 @@ export class SoftBodyPhysics {
                     // Apply lerp towards original position if we're in the fade-out phase
                     if (lerpAmount > 0) {
                         finalPos.lerp(this.originalPositions[idx], lerpAmount);
+                        // Aggressively zero out velocities during lerp (stronger damping)
+                        this.vertexVelocities[representative].multiplyScalar(1.0 - lerpAmount * 0.9);
                     }
                     
                     const idx3 = idx * 3;
@@ -423,6 +435,8 @@ export class SoftBodyPhysics {
                 // Apply lerp towards original position if we're in the fade-out phase
                 if (lerpAmount > 0) {
                     this.tempVec1.lerp(this.originalPositions[i], lerpAmount);
+                    // Aggressively zero out velocities during lerp (stronger damping)
+                    this.vertexVelocities[i].multiplyScalar(1.0 - lerpAmount * 0.9);
                 }
                 
                 posArray[i3] = this.tempVec1.x;
@@ -435,8 +449,8 @@ export class SoftBodyPhysics {
         positions.needsUpdate = true;
         
         // Only recalculate normals every 3 frames (huge performance boost!)
-        // The visual difference is negligible but performance is much better
-        if (this.frameCount % 3 === 0) {
+        // EXCEPT when lerp is complete (at original position) - then always recalculate for correct final state
+        if (this.frameCount % 3 === 0 || lerpAmount >= 1.0) {
             this.geometry.computeVertexNormals();
         }
     }

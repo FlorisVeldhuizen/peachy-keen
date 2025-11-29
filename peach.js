@@ -6,7 +6,7 @@ function createProceduralPeach() {
     console.log('🍑 Creating procedural peach...');
     
     // Peach body (sphere with deformations)
-    const peachGeometry = new THREE.SphereGeometry(1, 64, 64);
+    const peachGeometry = new THREE.SphereGeometry(1.5, 64, 64);
     const peachPositions = peachGeometry.attributes.position;
 
     // Add peach features: dimple at top and vertical seam creating two round halves
@@ -95,8 +95,8 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             const size = box.getSize(new THREE.Vector3());
             const center = box.getCenter(new THREE.Vector3());
             
-            // Scale the model to be about 2 units tall
-            const scaleFactor = 2 / size.y;
+            // Scale the model to be about 3 units tall (1.5x bigger)
+            const scaleFactor = 3 / size.y;
             model.scale.set(scaleFactor, scaleFactor, scaleFactor);
             
             // Recalculate box after scaling

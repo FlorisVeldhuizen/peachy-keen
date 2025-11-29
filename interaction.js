@@ -7,6 +7,8 @@ import { ParticleExplosion } from './particles.js';
 export const peachState = {
     velocity: new THREE.Vector3(0, 0, 0),
     angularVelocity: new THREE.Vector3(0, 0, 0),
+    physicsOffset: new THREE.Vector3(0, 0, 0), // Offset from default position due to physics
+    physicsRotation: new THREE.Euler(0, 0, 0), // Rotation offset due to physics
     defaultPosition: new THREE.Vector3(0, 0, 0),
     defaultRotation: new THREE.Euler(0, 0, 0),
     isWobbling: false,
@@ -17,7 +19,8 @@ export const peachState = {
     particleExplosion: null, // Reference to particle explosion system
     isRespawning: false, // Is the peach currently respawning?
     respawnTimer: 0, // Timer for respawn animation
-    respawnDuration: 1.5 // Duration of respawn animation in seconds
+    respawnDuration: 1.5, // Duration of respawn animation in seconds
+    idleAnimationTime: 0 // Separate time counter for idle animation (always running)
 };
 
 // Physics constants
@@ -103,17 +106,20 @@ export function setPeachMesh(meshes) {
                 softBody.resetToOriginalImmediate();
             });
             
-            // Set initial state for animation (far away and small)
-            if (peachGroup) {
-                peachGroup.position.set(0, 0, -10); // Start far back
-                peachGroup.rotation.copy(peachState.defaultRotation);
-                peachGroup.scale.set(0.01, 0.01, 0.01); // Start tiny
-            }
-            
             // Reset physics state
             peachState.velocity.set(0, 0, 0);
             peachState.angularVelocity.set(0, 0, 0);
+            peachState.physicsOffset.set(0, 0, 0);
+            peachState.physicsRotation.set(0, 0, 0);
             peachState.isWobbling = false;
+            // Don't reset idleAnimationTime here - let it continue running
+            
+            // Set initial state for animation (far away and small)
+            if (peachGroup) {
+                peachGroup.position.set(0, 0, -10); // Start far back
+                peachGroup.rotation.set(0, 0, 0); // Start at 0 rotation
+                peachGroup.scale.set(0.01, 0.01, 0.01); // Start tiny
+            }
         });
         console.log('💥 Particle explosion system initialized');
     }
@@ -241,6 +247,7 @@ function checkHoverSmack() {
         );
         
         peachState.isWobbling = true;
+        // Keep idle animation running in the background
         
         // Apply soft body impulse for jiggle effect at the intersection point
         const intersectPoint = intersects[0].point;
@@ -307,6 +314,9 @@ function updateRageMeter() {
 export function updatePeachPhysics(delta, idleTime) {
     if (!peachGroup) return;
     
+    // Always update idle animation time (runs continuously as base layer)
+    peachState.idleAnimationTime += delta;
+    
     // Update particle explosion if active
     if (peachState.particleExplosion) {
         peachState.particleExplosion.update(delta);
@@ -338,14 +348,18 @@ export function updatePeachPhysics(delta, idleTime) {
         const scale = 0.01 + (1.0 - 0.01) * progress;
         peachGroup.scale.set(scale, scale, scale);
         
-        // Add a little spin during entrance for flair
-        peachGroup.rotation.y = (1 - progress) * Math.PI * 2;
+        // Spin slows down and ends at rotation 0 (matching idle animation start)
+        const remainingSpin = (1 - progress);
+        peachGroup.rotation.x = peachState.defaultRotation.x;
+        peachGroup.rotation.y = remainingSpin * Math.PI * 2;
+        peachGroup.rotation.z = peachState.defaultRotation.z;
         
         // Check if animation is complete
         if (progress >= 1.0) {
             peachState.isRespawning = false;
             peachGroup.scale.set(1, 1, 1); // Ensure exact final scale
-            peachGroup.rotation.copy(peachState.defaultRotation);
+            // Reset idle animation so it starts from 0 (facing forward)
+            peachState.idleAnimationTime = 0;
             console.log('✨ Fresh peach ready!');
         }
         
@@ -363,70 +377,54 @@ export function updatePeachPhysics(delta, idleTime) {
         softBody.update(delta);
     });
     
+    // If wobbling, update physics offset
     if (peachState.isWobbling) {
-        // Check how close we are to settling
         const velocityLength = peachState.velocity.length();
         const angularVelLength = peachState.angularVelocity.length();
         const settleThreshold = 0.01;
         
-        // Calculate blend factor for smooth transition to idle - synchronized with softbody lerping
-        const blendStart = 0.15; // Start blending earlier when velocity < 0.15 (extended range)
-        let idleBlend = 0;
-        if (velocityLength < blendStart || angularVelLength < blendStart) {
-            // Map velocity from [0, blendStart] to blend [1, 0]
-            const velFactor = Math.max(velocityLength, angularVelLength);
-            let t = 1.0 - (velFactor / blendStart);
-            t = Math.max(0, Math.min(1, t));
-            // Use same ease in-out curve as softbody for synchronized feel
-            idleBlend = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        }
+        // Apply velocity to physics offset
+        peachState.physicsOffset.add(peachState.velocity.clone().multiplyScalar(delta));
         
-        // Apply velocity
-        peachGroup.position.add(peachState.velocity.clone().multiplyScalar(delta));
+        // Apply angular velocity to physics rotation
+        peachState.physicsRotation.x += peachState.angularVelocity.x * delta;
+        peachState.physicsRotation.y += peachState.angularVelocity.y * delta;
+        peachState.physicsRotation.z += peachState.angularVelocity.z * delta;
         
-        // Apply angular velocity
-        peachGroup.rotation.x += peachState.angularVelocity.x * delta;
-        peachGroup.rotation.y += peachState.angularVelocity.y * delta;
-        peachGroup.rotation.z += peachState.angularVelocity.z * delta;
+        // Apply damping
+        peachState.velocity.multiplyScalar(damping);
+        peachState.angularVelocity.multiplyScalar(angularDamping);
         
-        // Apply damping (increase damping as we blend to idle for smoother transition)
-        const blendedDamping = damping - (idleBlend * 0.03); // Slightly more damping during transition
-        const blendedAngularDamping = angularDamping - (idleBlend * 0.05);
-        peachState.velocity.multiplyScalar(blendedDamping);
-        peachState.angularVelocity.multiplyScalar(blendedAngularDamping);
+        // Return force pulls physics offset back to zero
+        const toDefault = peachState.physicsOffset.clone().multiplyScalar(-returnForce);
+        peachState.velocity.add(toDefault);
         
-        // Return to default position
-        const toDefault = peachState.defaultPosition.clone().sub(peachGroup.position);
-        peachState.velocity.add(toDefault.multiplyScalar(returnForce));
-        
-        // Return to default rotation gradually (faster as we approach idle)
-        const rotationBlend = 0.05 + (idleBlend * 0.05);
-        peachGroup.rotation.x += (peachState.defaultRotation.x - peachGroup.rotation.x) * rotationBlend;
-        peachGroup.rotation.y += (peachState.defaultRotation.y - peachGroup.rotation.y) * rotationBlend;
-        peachGroup.rotation.z += (peachState.defaultRotation.z - peachGroup.rotation.z) * rotationBlend;
-        
-        // Blend towards idle animation position as we settle (more gradual)
-        if (idleBlend > 0) {
-            const targetIdleY = Math.sin(idleTime * 1.5) * 0.2;
-            const targetIdleRotY = Math.sin(idleTime * 0.5) * 0.3;
-            
-            // Gradually blend over time - use smaller multiplier for very subtle transition
-            const blendStrength = idleBlend * 0.05;
-            peachGroup.position.y += (targetIdleY - peachGroup.position.y) * blendStrength;
-            peachGroup.rotation.y += (targetIdleRotY - peachGroup.rotation.y) * blendStrength;
-        }
+        // Return to default rotation gradually
+        peachState.physicsRotation.x += (0 - peachState.physicsRotation.x) * 0.05;
+        peachState.physicsRotation.y += (0 - peachState.physicsRotation.y) * 0.05;
+        peachState.physicsRotation.z += (0 - peachState.physicsRotation.z) * 0.05;
         
         // Check if peach has settled
         if (velocityLength < settleThreshold && angularVelLength < settleThreshold) {
             peachState.isWobbling = false;
             peachState.velocity.set(0, 0, 0);
             peachState.angularVelocity.set(0, 0, 0);
-            // Position should already be very close to idle animation from blending
+            peachState.physicsOffset.set(0, 0, 0);
+            peachState.physicsRotation.set(0, 0, 0);
         }
-    } else {
-        // Idle floating animation
-        peachGroup.position.y = Math.sin(idleTime * 1.5) * 0.2;
-        peachGroup.rotation.y = Math.sin(idleTime * 0.5) * 0.3;
     }
+    
+    // ALWAYS apply idle animation as base layer
+    const idleY = Math.sin(peachState.idleAnimationTime * 1.5) * 0.2;
+    const idleRotY = Math.sin(peachState.idleAnimationTime * 0.5) * 0.3;
+    
+    // Apply: default + idle + physics offset
+    peachGroup.position.x = peachState.defaultPosition.x + peachState.physicsOffset.x;
+    peachGroup.position.y = peachState.defaultPosition.y + idleY + peachState.physicsOffset.y;
+    peachGroup.position.z = peachState.defaultPosition.z + peachState.physicsOffset.z;
+    
+    peachGroup.rotation.x = peachState.defaultRotation.x + peachState.physicsRotation.x;
+    peachGroup.rotation.y = peachState.defaultRotation.y + idleRotY + peachState.physicsRotation.y;
+    peachGroup.rotation.z = peachState.defaultRotation.z + peachState.physicsRotation.z;
 }
 
