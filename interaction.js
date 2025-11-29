@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { playSmackSound } from './audio.js';
+import { SoftBodyPhysics } from './softbody.js';
 
 // Physics and interaction state
 export const peachState = {
@@ -7,7 +8,8 @@ export const peachState = {
     angularVelocity: new THREE.Vector3(0, 0, 0),
     defaultPosition: new THREE.Vector3(0, 0, 0),
     defaultRotation: new THREE.Euler(0, 0, 0),
-    isWobbling: false
+    isWobbling: false,
+    softBodies: [] // Array of soft body physics instances for each mesh
 };
 
 // Physics constants
@@ -42,9 +44,27 @@ export function initInteraction(peachGroupRef, cameraRef) {
     window.addEventListener('mousemove', onMouseMove);
 }
 
-// Set the peach mesh for raycasting
+// Set the peach mesh for raycasting and initialize soft body physics
 export function setPeachMesh(meshes) {
     peachMesh = meshes;
+    
+    // Initialize soft body physics for each mesh
+    peachState.softBodies = [];
+    const meshArray = Array.isArray(meshes) ? meshes : [meshes];
+    
+    meshArray.forEach(mesh => {
+        if (mesh.geometry && mesh.geometry.attributes.position) {
+            // Make sure geometry is not shared/indexed in a way that prevents modification
+            if (!mesh.geometry.attributes.position.array) {
+                console.warn('⚠️ Mesh geometry cannot be modified, skipping soft body physics');
+                return;
+            }
+            
+            const softBody = new SoftBodyPhysics(mesh);
+            peachState.softBodies.push(softBody);
+            console.log('🍑 Soft body physics enabled for mesh:', mesh.name || 'unnamed');
+        }
+    });
 }
 
 // Track mouse movement for velocity calculation
@@ -136,6 +156,12 @@ function checkHoverSmack() {
         
         peachState.isWobbling = true;
         
+        // Apply soft body impulse for jiggle effect (subtle!)
+        const jiggleForce = 0.15 * velocityScale; // Force for vertex deformation
+        peachState.softBodies.forEach(softBody => {
+            softBody.applyImpulse(intersectPoint, direction.clone(), jiggleForce);
+        });
+        
         // Sound intensity based on velocity
         const intensity = Math.min(0.4 + velocityMagnitude / 30, 1.0);
         playSmackSound(intensity);
@@ -145,6 +171,11 @@ function checkHoverSmack() {
 // Update peach physics
 export function updatePeachPhysics(delta, idleTime) {
     if (!peachGroup) return;
+    
+    // Update soft body physics (jiggle)
+    peachState.softBodies.forEach(softBody => {
+        softBody.update(delta);
+    });
     
     if (peachState.isWobbling) {
         // Apply velocity
