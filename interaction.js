@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { playSmackSound } from './audio.js';
+import { playSmackSound, playExplosionSound } from './audio.js';
 import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
 
@@ -273,6 +273,7 @@ function checkHoverSmack() {
             if (!peachState.particleExplosion.isActive()) {
                 console.log('💥💥💥 RAGE EXPLOSION! 💥💥💥');
                 peachState.particleExplosion.explode();
+                playExplosionSound(1.0); // Play the "uh" sound at full volume
                 peachState.rageLevel = 0; // Reset rage after explosion
                 updateRageMeter();
             }

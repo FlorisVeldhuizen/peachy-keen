@@ -4,10 +4,20 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Load slap sound effects
 const slapSounds = [];
 const slapSoundPaths = [
-    '/assets/Slap sound effect 1.m4a',
-    '/assets/Slap sound effect 2.m4a',
-    '/assets/Slap sound effect 3.m4a'
+    // '/assets/ass.m4a',
+    '/assets/ass2.m4a',
+    '/assets/ass3.m4a',
+    '/assets/ass4.m4a',
+    '/assets/ass5.m4a',
+
+    // '/assets/Slap sound effect 1.m4a',
+    // '/assets/Slap sound effect 2.m4a',
+    // '/assets/Slap sound effect 3.m4a'
 ];
+
+// Load explosion sound effect
+let explosionSound = null;
+const explosionSoundPath = '/assets/uh.m4a';
 
 // Load all sound files
 async function loadSounds() {
@@ -21,6 +31,16 @@ async function loadSounds() {
         } catch (error) {
             console.error(`❌ Error loading sound ${i + 1}:`, error);
         }
+    }
+    
+    // Load explosion sound
+    try {
+        const response = await fetch(explosionSoundPath);
+        const arrayBuffer = await response.arrayBuffer();
+        explosionSound = await audioContext.decodeAudioData(arrayBuffer);
+        console.log('✅ Loaded explosion sound');
+    } catch (error) {
+        console.error('❌ Error loading explosion sound:', error);
     }
 }
 
@@ -72,5 +92,30 @@ function playSmackSound(intensity = 1.0) {
     source.start(now, silentOffset);
 }
 
-export { loadSounds, playSmackSound };
+// Function to play explosion sound
+function playExplosionSound(intensity = 1.0) {
+    if (!explosionSound) {
+        console.log('Explosion sound not loaded yet...');
+        return;
+    }
+    
+    const now = audioContext.currentTime;
+    
+    // Create buffer source
+    const source = audioContext.createBufferSource();
+    source.buffer = explosionSound;
+    
+    // Create gain node for volume control
+    const gainNode = audioContext.createGain();
+    gainNode.gain.setValueAtTime(intensity * 0.8, now);
+    
+    // Connect the audio graph
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Play the sound
+    source.start(now);
+}
+
+export { loadSounds, playSmackSound, playExplosionSound };
 
