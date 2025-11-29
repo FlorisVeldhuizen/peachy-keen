@@ -24,6 +24,9 @@ export class SoftBodyPhysics {
         this.geometry = mesh.geometry.clone(); // Clone to avoid modifying original
         this.mesh.geometry = this.geometry; // Use the clone
         
+        // Recompute normals immediately to ensure consistent lighting from the start
+        this.geometry.computeVertexNormals();
+        
         // Store original positions for spring rest state
         this.originalPositions = [];
         this.vertexVelocities = [];

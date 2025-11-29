@@ -11,12 +11,27 @@
             overflow: hidden;
             font-family: Arial, sans-serif;
             cursor: none; /* Hide default cursor */
+            -webkit-user-select: none; /* Prevent text selection on mobile */
+            user-select: none;
+            -webkit-touch-callout: none; /* Prevent callout on iOS */
+        }
+        
+        /* Show default cursor on touch devices */
+        @media (hover: none) and (pointer: coarse) {
+            body {
+                cursor: auto;
+            }
+            
+            #hand-cursor {
+                display: none !important;
+            }
         }
         
         #canvas {
             display: block;
             width: 100vw;
             height: 100vh;
+            touch-action: none; /* Prevent default touch behaviors like scrolling */
         }
         
         .instructions {
@@ -30,6 +45,15 @@
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
             pointer-events: none;
             z-index: 10;
+            padding: 0 20px;
+        }
+        
+        /* Responsive text for mobile */
+        @media (max-width: 600px) {
+            .instructions {
+                font-size: 16px;
+                top: 10px;
+            }
         }
         
         #hand-cursor {
@@ -60,6 +84,7 @@
             left: 50%;
             transform: translateX(-50%);
             width: 400px;
+            max-width: 90vw; /* Responsive width for mobile */
             height: 40px;
             background: rgba(0, 0, 0, 0.7);
             border-radius: 20px;
@@ -69,6 +94,18 @@
             opacity: 0;
             transition: opacity 0.3s ease;
             z-index: 10;
+        }
+        
+        /* Smaller rage meter on mobile */
+        @media (max-width: 600px) {
+            #rage-meter-container {
+                bottom: 20px;
+                height: 35px;
+            }
+            
+            #rage-meter-label {
+                font-size: 12px !important;
+            }
         }
         
         #rage-meter-fill {
@@ -104,11 +141,70 @@
                             inset 0 0 30px rgba(255, 100, 100, 0.8);
             }
         }
+        
+        /* Sound Enable Overlay */
+        #sound-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+        
+        #sound-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        #sound-overlay-content {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 25px 45px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        @media (max-width: 600px) {
+            #sound-overlay-content {
+                padding: 20px 35px;
+            }
+        }
+        
+        #sound-overlay-content p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 20px;
+            margin: 0;
+            text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
+            font-weight: 300;
+            letter-spacing: 0.5px;
+        }
+        
+        @media (max-width: 600px) {
+            #sound-overlay-content p {
+                font-size: 18px;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Sound Enable Overlay -->
+    <div id="sound-overlay">
+        <div id="sound-overlay-content">
+            <p>Click anywhere to start</p>
+        </div>
+    </div>
+    
     <div class="instructions">
-        🍑 Move your hand over the peach to smack it! 🍑
+        🍑 Swipe over the peach to smack it! 🍑
     </div>
     
     <div id="rage-meter-container">

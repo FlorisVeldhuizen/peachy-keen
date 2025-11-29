@@ -40,10 +40,10 @@ export class ParticleExplosion {
         // Particle geometry and material (shared for performance)
         this.particleGeometry = new THREE.SphereGeometry(PARTICLE_RADIUS, PARTICLE_SPHERE_SEGMENTS, PARTICLE_SPHERE_SEGMENTS);
         this.particleMaterial = new THREE.MeshStandardMaterial({
-            color: 0xffb347,
+            color: 0xffb0c0,
             roughness: 0.7,
             metalness: 0.0,
-            emissive: 0xff4400,
+            emissive: 0xff7090,
             emissiveIntensity: EMISSIVE_BASE
         });
         

@@ -84,7 +84,13 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
         peachState.sceneRef = sceneRef;
     }
     
+    // Mouse events
     window.addEventListener('mousemove', onMouseMove);
+    
+    // Touch events for mobile devices
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
 /**
@@ -154,19 +160,53 @@ export function setPeachMesh(meshes) {
 
 // Track mouse movement for velocity calculation
 function onMouseMove(event) {
-    // Update hand cursor position
+    updatePointerPosition(event.clientX, event.clientY);
+    
+    // Update hand cursor position (only for mouse, not touch)
     if (handCursor) {
         handCursor.style.left = event.clientX + 'px';
         handCursor.style.top = event.clientY + 'px';
     }
     
+    // Check for hover and smack
+    checkHoverSmack();
+}
+
+// Touch event handlers for mobile devices
+function onTouchStart(event) {
+    if (event.touches.length > 0) {
+        const touch = event.touches[0];
+        updatePointerPosition(touch.clientX, touch.clientY);
+        
+        // Hide hand cursor on touch devices
+        if (handCursor) {
+            handCursor.style.display = 'none';
+        }
+    }
+}
+
+function onTouchMove(event) {
+    if (event.touches.length > 0) {
+        const touch = event.touches[0];
+        updatePointerPosition(touch.clientX, touch.clientY);
+        checkHoverSmack();
+    }
+}
+
+function onTouchEnd(event) {
+    // Reset hover state when touch ends
+    mouseState.isHoveringPeach = false;
+}
+
+// Unified function to update pointer position (works for both mouse and touch)
+function updatePointerPosition(clientX, clientY) {
     // Store last position
     mouseState.lastPosition.x = mouseState.position.x;
     mouseState.lastPosition.y = mouseState.position.y;
     
     // Update current position
-    mouseState.position.x = event.clientX;
-    mouseState.position.y = event.clientY;
+    mouseState.position.x = clientX;
+    mouseState.position.y = clientY;
     
     // Calculate velocity (pixels per frame)
     mouseState.velocity.x = mouseState.position.x - mouseState.lastPosition.x;
@@ -184,12 +224,9 @@ function onMouseMove(event) {
         mouseState.velocityHistory.shift();
     }
     
-    // Update normalized mouse coordinates for raycasting
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    
-    // Check for hover and smack
-    checkHoverSmack();
+    // Update normalized coordinates for raycasting
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 }
 
 function checkHoverSmack() {

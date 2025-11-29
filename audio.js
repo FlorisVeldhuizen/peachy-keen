@@ -4,11 +4,11 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Audio configuration
 const AUDIO_CONFIG = {
     slapSounds: [
-        '/assets/ass2.m4a',
-        '/assets/ass3.m4a',
-        '/assets/ass5.m4a'
+        `${import.meta.env.BASE_URL}assets/ass2.m4a`,
+        `${import.meta.env.BASE_URL}assets/ass3.m4a`,
+        `${import.meta.env.BASE_URL}assets/ass5.m4a`
     ],
-    explosionSound: '/assets/uh.m4a',
+    explosionSound: `${import.meta.env.BASE_URL}assets/uh.m4a`,
     pitchVariationMin: 0.85,
     pitchVariationMax: 1.15,
     highShelfFrequency: 2000,
@@ -129,5 +129,14 @@ function playExplosionSound(intensity = 1.0) {
     source.start(now);
 }
 
-export { loadSounds, playSmackSound, playExplosionSound };
+/**
+ * Resume audio context (required for browsers that suspend audio until user interaction)
+ */
+async function resumeAudioContext() {
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+    }
+}
+
+export { loadSounds, playSmackSound, playExplosionSound, resumeAudioContext };
 

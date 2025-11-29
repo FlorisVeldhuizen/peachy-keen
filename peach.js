@@ -180,7 +180,7 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
     const normalMap = generatePeachNormalMap();
     
     loader.load(
-        '/assets/peachy.glb',
+        `${import.meta.env.BASE_URL}assets/peachy.glb`,
         (gltf) => {
             const model = gltf.scene;
             
