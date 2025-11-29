@@ -6,25 +6,45 @@ import * as THREE from 'three';
  * that dramatically scatter and then slowly reform
  */
 
+// Particle system constants
+const PARTICLE_SPHERE_SEGMENTS = 8;
+const PARTICLE_RADIUS = 0.05;
+const MAX_PARTICLES = 300;
+const EXPLOSION_FORCE = 8.0;
+const FALL_DURATION = 4.0;
+const FADE_START_TIME = 2.5;
+const FADE_DURATION = 1.5;
+const GRAVITY_STRENGTH = 15.0;
+const AIR_RESISTANCE = 0.99;
+const ROTATION_DAMPING = 0.98;
+const UPWARD_BIAS = 2.0;
+const EMISSIVE_BASE = 0.3;
+const EMISSIVE_PULSE_AMPLITUDE = 0.2;
+const EMISSIVE_PULSE_FREQUENCY = 10;
+
 export class ParticleExplosion {
     constructor(mesh, scene, onComplete) {
+        if (!mesh || !scene) {
+            throw new Error('ParticleExplosion: Missing required parameters');
+        }
+        
         this.originalMesh = mesh;
         this.scene = scene;
-        this.onComplete = onComplete; // Callback when explosion finishes
+        this.onComplete = onComplete;
         this.particles = [];
         this.isExploding = false;
         this.explosionTimer = 0;
-        this.explosionForce = 8.0;
-        this.fallDuration = 4.0; // seconds for particles to fall
+        this.explosionForce = EXPLOSION_FORCE;
+        this.fallDuration = FALL_DURATION;
         
-        // Particle geometry and material
-        this.particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+        // Particle geometry and material (shared for performance)
+        this.particleGeometry = new THREE.SphereGeometry(PARTICLE_RADIUS, PARTICLE_SPHERE_SEGMENTS, PARTICLE_SPHERE_SEGMENTS);
         this.particleMaterial = new THREE.MeshStandardMaterial({
             color: 0xffb347,
             roughness: 0.7,
             metalness: 0.0,
             emissive: 0xff4400,
-            emissiveIntensity: 0.3
+            emissiveIntensity: EMISSIVE_BASE
         });
         
         // Group to hold all particles
@@ -41,8 +61,6 @@ export class ParticleExplosion {
      */
     explode() {
         if (this.isExploding) return; // Already exploding
-        
-        console.log('💥 PEACH EXPLOSION TRIGGERED!');
         
         this.isExploding = true;
         this.explosionTimer = 0;
@@ -74,7 +92,7 @@ export class ParticleExplosion {
             const positions = geometry.attributes.position;
             
             // Sample every Nth vertex to create particles
-            const samplingRate = Math.max(1, Math.floor(positions.count / 300)); // ~300 particles max
+            const samplingRate = Math.max(1, Math.floor(positions.count / MAX_PARTICLES));
             
             for (let i = 0; i < positions.count; i += samplingRate) {
                 const vertex = new THREE.Vector3(
@@ -86,7 +104,7 @@ export class ParticleExplosion {
                 // Transform to world space
                 vertex.applyMatrix4(mesh.matrixWorld);
                 
-                // Create particle
+                // Create particle (share geometry, clone material for individual control)
                 const particle = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
                 particle.position.copy(vertex);
                 
@@ -99,8 +117,6 @@ export class ParticleExplosion {
                 this.particles.push(particle);
             }
         });
-        
-        console.log(`💥 Created ${this.particles.length} explosion particles`);
     }
     
     /**
@@ -132,7 +148,7 @@ export class ParticleExplosion {
             particle.userData.velocity.copy(direction).multiplyScalar(forceMagnitude);
             
             // Add slight upward bias for dramatic effect
-            particle.userData.velocity.y += 2.0;
+            particle.userData.velocity.y += UPWARD_BIAS;
             
             // Random rotation for visual interest
             particle.rotation.set(
@@ -157,22 +173,21 @@ export class ParticleExplosion {
         this.explosionTimer += delta;
         
         // Calculate fade progress (starts after particles have fallen)
-        const fadeStartTime = 2.5;
         let fadeProgress = 0;
-        if (this.explosionTimer > fadeStartTime) {
-            fadeProgress = Math.min(1.0, (this.explosionTimer - fadeStartTime) / 1.5);
+        if (this.explosionTimer > FADE_START_TIME) {
+            fadeProgress = Math.min(1.0, (this.explosionTimer - FADE_START_TIME) / FADE_DURATION);
         }
         
         // Update each particle
         this.particles.forEach(particle => {
             const velocity = particle.userData.velocity;
             
-            // Apply gravity (stronger than before)
-            velocity.y -= 15.0 * delta;
+            // Apply gravity
+            velocity.y -= GRAVITY_STRENGTH * delta;
             
             // Air resistance
-            velocity.x *= 0.99;
-            velocity.z *= 0.99;
+            velocity.x *= AIR_RESISTANCE;
+            velocity.z *= AIR_RESISTANCE;
             
             // Update position
             particle.position.add(velocity.clone().multiplyScalar(delta));
@@ -184,18 +199,18 @@ export class ParticleExplosion {
             particle.rotation.z += angularVel.z * delta;
             
             // Slow down rotation over time
-            angularVel.multiplyScalar(0.98);
+            angularVel.multiplyScalar(ROTATION_DAMPING);
             
             // Pulse emissive intensity during explosion
             if (fadeProgress === 0) {
-                particle.material.emissiveIntensity = 0.3 + Math.sin(this.explosionTimer * 10) * 0.2;
+                particle.material.emissiveIntensity = EMISSIVE_BASE + Math.sin(this.explosionTimer * EMISSIVE_PULSE_FREQUENCY) * EMISSIVE_PULSE_AMPLITUDE;
             } else {
                 // Fade out particles
                 const fadeAmount = 1.0 - fadeProgress;
                 particle.scale.setScalar(fadeAmount);
                 particle.material.opacity = fadeAmount;
                 particle.material.transparent = true;
-                particle.material.emissiveIntensity = 0.3 * fadeAmount;
+                particle.material.emissiveIntensity = EMISSIVE_BASE * fadeAmount;
             }
         });
         
@@ -209,9 +224,7 @@ export class ParticleExplosion {
      * Complete the explosion and trigger respawn
      */
     finishExplosion() {
-        console.log('✨ Explosion complete - spawning fresh peach!');
-        
-        // Clear particles
+        // Clear all particles
         this.clearParticles();
         
         this.isExploding = false;
@@ -229,7 +242,7 @@ export class ParticleExplosion {
     clearParticles() {
         this.particles.forEach(particle => {
             this.particleGroup.remove(particle);
-            particle.geometry.dispose();
+            // Don't dispose geometry - it's shared
             particle.material.dispose();
         });
         this.particles = [];
@@ -247,6 +260,8 @@ export class ParticleExplosion {
      */
     dispose() {
         this.clearParticles();
+        this.particleGeometry.dispose();
+        this.particleMaterial.dispose();
         this.scene.remove(this.particleGroup);
     }
 }

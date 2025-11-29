@@ -3,6 +3,21 @@ import { playSmackSound, playExplosionSound } from './audio.js';
 import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
 
+// Constants
+const PHYSICS_DAMPING = 0.95;
+const RETURN_FORCE = 0.05;
+const ANGULAR_DAMPING = 0.92;
+const SMACK_COOLDOWN_MS = 200;
+const VELOCITY_HISTORY_SIZE = 5;
+const MIN_VELOCITY_THRESHOLD = 2;
+const RAGE_DECAY_RATE = 15;
+const RAGE_EXPLOSION_THRESHOLD = 100;
+const RAGE_BASE_INCREASE = 4;
+const RAGE_VELOCITY_MULTIPLIER = 3;
+const RESPAWN_DURATION = 1.5;
+const VELOCITY_SETTLE_THRESHOLD = 0.01;
+const ROTATION_RETURN_FACTOR = 0.05;
+
 // Physics and interaction state
 export const peachState = {
     velocity: new THREE.Vector3(0, 0, 0),
@@ -14,19 +29,14 @@ export const peachState = {
     isWobbling: false,
     softBodies: [], // Array of soft body physics instances for each mesh
     rageLevel: 0, // Builds up with each hit (0-100)
-    rageDecayRate: 15, // Points per second that rage decays (even faster!)
-    explosionThreshold: 100, // Rage level needed to trigger explosion
+    rageDecayRate: RAGE_DECAY_RATE,
+    explosionThreshold: RAGE_EXPLOSION_THRESHOLD,
     particleExplosion: null, // Reference to particle explosion system
     isRespawning: false, // Is the peach currently respawning?
     respawnTimer: 0, // Timer for respawn animation
-    respawnDuration: 1.5, // Duration of respawn animation in seconds
+    respawnDuration: RESPAWN_DURATION,
     idleAnimationTime: 0 // Separate time counter for idle animation (always running)
 };
-
-// Physics constants
-const damping = 0.95;
-const returnForce = 0.05;
-const angularDamping = 0.92;
 
 // Mouse tracking state
 const mouseState = {
@@ -34,10 +44,9 @@ const mouseState = {
     lastPosition: { x: 0, y: 0 },
     velocity: { x: 0, y: 0 },
     lastSmackTime: 0,
-    smackCooldown: 200, // ms between smacks
-    // Velocity history for smoothing (store last N frames)
+    smackCooldown: SMACK_COOLDOWN_MS,
     velocityHistory: [],
-    maxHistorySize: 5, // Average over 5 frames for smooth direction
+    maxHistorySize: VELOCITY_HISTORY_SIZE,
     isHoveringPeach: false // Track if cursor is currently over the peach
 };
 
@@ -50,23 +59,44 @@ let peachGroup = null;
 let camera = null;
 let handCursor = null;
 
-// Initialize interaction system
+/**
+ * Initialize the interaction system
+ * @param {THREE.Group} peachGroupRef - The peach group
+ * @param {THREE.Camera} cameraRef - The camera
+ * @param {THREE.Scene} sceneRef - The scene
+ */
 export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
+    if (!peachGroupRef || !cameraRef) {
+        console.error('initInteraction: Missing required parameters');
+        return;
+    }
+    
     peachGroup = peachGroupRef;
     camera = cameraRef;
     handCursor = document.getElementById('hand-cursor');
     
+    if (!handCursor) {
+        console.warn('Hand cursor element not found');
+    }
+    
     // Initialize particle explosion system (will be set up once mesh is loaded)
     if (sceneRef) {
-        // Store scene reference for later initialization
         peachState.sceneRef = sceneRef;
     }
     
     window.addEventListener('mousemove', onMouseMove);
 }
 
-// Set the peach mesh for raycasting and initialize soft body physics
+/**
+ * Set the peach mesh for raycasting and initialize soft body physics
+ * @param {Array|THREE.Mesh} meshes - The peach mesh(es)
+ */
 export function setPeachMesh(meshes) {
+    if (!meshes) {
+        console.error('setPeachMesh: No meshes provided');
+        return;
+    }
+    
     peachMesh = meshes;
     
     // Initialize soft body physics for each mesh
@@ -83,7 +113,6 @@ export function setPeachMesh(meshes) {
             
             const softBody = new SoftBodyPhysics(mesh);
             peachState.softBodies.push(softBody);
-            console.log('🍑 Soft body physics enabled for mesh:', mesh.name || 'unnamed');
         }
     });
     
@@ -91,8 +120,6 @@ export function setPeachMesh(meshes) {
     if (peachState.sceneRef && !peachState.particleExplosion) {
         peachState.particleExplosion = new ParticleExplosion(meshArray, peachState.sceneRef, () => {
             // Callback when explosion is complete - spawn fresh peach
-            console.log('🍑 Spawning fresh peach...');
-            
             // Show meshes again
             meshArray.forEach(mesh => {
                 mesh.visible = true;
@@ -122,7 +149,6 @@ export function setPeachMesh(meshes) {
                 peachGroup.scale.set(0.01, 0.01, 0.01); // Start tiny
             }
         });
-        console.log('💥 Particle explosion system initialized');
     }
 }
 
@@ -217,13 +243,9 @@ function checkHoverSmack() {
         );
         
         // Only smack if moving fast enough (minimum threshold)
-        const minVelocity = 2; // pixels per frame
-        if (velocityMagnitude < minVelocity) return;
+        if (velocityMagnitude < MIN_VELOCITY_THRESHOLD) return;
         
         mouseState.lastSmackTime = currentTime;
-        
-        console.log('🍑 SMACK! Velocity:', velocityMagnitude.toFixed(2), 
-                    'Direction:', avgVelocityX.toFixed(1), avgVelocityY.toFixed(1));
         
         // Add smack animation to cursor
         if (handCursor) {
@@ -276,10 +298,9 @@ function checkHoverSmack() {
         // Mark that we're now hovering (after a successful smack)
         mouseState.isHoveringPeach = true;
         
-        // Increase rage level based on hit intensity (even smaller increases now!)
-        const rageIncrease = 4 + (velocityScale * 3);
-        peachState.rageLevel = Math.min(100, peachState.rageLevel + rageIncrease);
-        console.log(`🍑 Peach-O-Meter: ${peachState.rageLevel.toFixed(1)}/100`);
+        // Increase rage level based on hit intensity
+        const rageIncrease = RAGE_BASE_INCREASE + (velocityScale * RAGE_VELOCITY_MULTIPLIER);
+        peachState.rageLevel = Math.min(RAGE_EXPLOSION_THRESHOLD, peachState.rageLevel + rageIncrease);
         
         // Update rage meter UI
         updateRageMeter();
@@ -287,9 +308,8 @@ function checkHoverSmack() {
         // Trigger explosion if rage threshold is reached
         if (peachState.rageLevel >= peachState.explosionThreshold && peachState.particleExplosion) {
             if (!peachState.particleExplosion.isActive()) {
-                console.log('💥💥💥 RAGE EXPLOSION! 💥💥💥');
                 peachState.particleExplosion.explode();
-                playExplosionSound(1.0); // Play the "uh" sound at full volume
+                playExplosionSound(1.0);
                 peachState.rageLevel = 0; // Reset rage after explosion
                 updateRageMeter();
             }
@@ -307,7 +327,9 @@ function updateRageMeter() {
     const rageMeter = document.getElementById('rage-meter-fill');
     const rageContainer = document.getElementById('rage-meter-container');
     
-    if (rageMeter && rageContainer) {
+    if (!rageMeter || !rageContainer) return;
+    
+    try {
         rageMeter.style.width = `${peachState.rageLevel}%`;
         
         // Change color based on rage level
@@ -327,12 +349,21 @@ function updateRageMeter() {
         } else {
             rageContainer.style.opacity = '0';
         }
+    } catch (error) {
+        console.error('Error updating rage meter:', error);
     }
 }
 
-// Update peach physics
+/**
+ * Update peach physics and animation
+ * @param {number} delta - Time delta since last frame
+ * @param {number} idleTime - Total idle animation time
+ */
 export function updatePeachPhysics(delta, idleTime) {
     if (!peachGroup) return;
+    
+    // Validate delta to prevent physics explosions
+    if (!delta || delta <= 0 || delta > 1) return;
     
     // Always update idle animation time (runs continuously as base layer)
     peachState.idleAnimationTime += delta;
@@ -380,7 +411,6 @@ export function updatePeachPhysics(delta, idleTime) {
             peachGroup.scale.set(1, 1, 1); // Ensure exact final scale
             // Reset idle animation so it starts from 0 (facing forward)
             peachState.idleAnimationTime = 0;
-            console.log('✨ Fresh peach ready!');
         }
         
         return; // Skip normal physics during respawn
@@ -412,20 +442,20 @@ export function updatePeachPhysics(delta, idleTime) {
         peachState.physicsRotation.z += peachState.angularVelocity.z * delta;
         
         // Apply damping
-        peachState.velocity.multiplyScalar(damping);
-        peachState.angularVelocity.multiplyScalar(angularDamping);
+        peachState.velocity.multiplyScalar(PHYSICS_DAMPING);
+        peachState.angularVelocity.multiplyScalar(ANGULAR_DAMPING);
         
         // Return force pulls physics offset back to zero
-        const toDefault = peachState.physicsOffset.clone().multiplyScalar(-returnForce);
+        const toDefault = peachState.physicsOffset.clone().multiplyScalar(-RETURN_FORCE);
         peachState.velocity.add(toDefault);
         
         // Return to default rotation gradually
-        peachState.physicsRotation.x += (0 - peachState.physicsRotation.x) * 0.05;
-        peachState.physicsRotation.y += (0 - peachState.physicsRotation.y) * 0.05;
-        peachState.physicsRotation.z += (0 - peachState.physicsRotation.z) * 0.05;
+        peachState.physicsRotation.x += (0 - peachState.physicsRotation.x) * ROTATION_RETURN_FACTOR;
+        peachState.physicsRotation.y += (0 - peachState.physicsRotation.y) * ROTATION_RETURN_FACTOR;
+        peachState.physicsRotation.z += (0 - peachState.physicsRotation.z) * ROTATION_RETURN_FACTOR;
         
         // Check if peach has settled
-        if (velocityLength < settleThreshold && angularVelLength < settleThreshold) {
+        if (velocityLength < VELOCITY_SETTLE_THRESHOLD && angularVelLength < VELOCITY_SETTLE_THRESHOLD) {
             peachState.isWobbling = false;
             peachState.velocity.set(0, 0, 0);
             peachState.angularVelocity.set(0, 0, 0);

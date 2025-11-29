@@ -1,55 +1,66 @@
 // Audio context for sound effects
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-// Load slap sound effects
+// Audio configuration
+const AUDIO_CONFIG = {
+    slapSounds: [
+        '/assets/ass2.m4a',
+        '/assets/ass3.m4a',
+        '/assets/ass5.m4a'
+    ],
+    explosionSound: '/assets/uh.m4a',
+    pitchVariationMin: 0.85,
+    pitchVariationMax: 1.15,
+    highShelfFrequency: 2000,
+    highShelfGainMin: 3,
+    highShelfGainMax: 6,
+    lowpassFrequencyMin: 8000,
+    lowpassFrequencyMax: 12000,
+    lowpassQ: 0.7,
+    silentOffset: 0.08
+};
+
+// Sound buffers
 const slapSounds = [];
-const slapSoundPaths = [
-    // '/assets/ass.m4a',
-    '/assets/ass2.m4a',
-    '/assets/ass3.m4a',
-    // '/assets/ass4.m4a',
-    '/assets/ass5.m4a',
-
-    // '/assets/Slap sound effect 1.m4a',
-    // '/assets/Slap sound effect 2.m4a',
-    // '/assets/Slap sound effect 3.m4a'
-];
-
-// Load explosion sound effect
 let explosionSound = null;
-const explosionSoundPath = '/assets/uh.m4a';
 
-// Load all sound files
+/**
+ * Load a single audio file and return the decoded buffer
+ */
+async function loadAudioFile(path) {
+    const response = await fetch(path);
+    const arrayBuffer = await response.arrayBuffer();
+    return await audioContext.decodeAudioData(arrayBuffer);
+}
+
+/**
+ * Load all sound files
+ */
 async function loadSounds() {
-    for (let i = 0; i < slapSoundPaths.length; i++) {
+    // Load slap sounds
+    for (let i = 0; i < AUDIO_CONFIG.slapSounds.length; i++) {
         try {
-            const response = await fetch(slapSoundPaths[i]);
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            slapSounds.push(audioBuffer);
-            console.log(`✅ Loaded sound ${i + 1}`);
+            const buffer = await loadAudioFile(AUDIO_CONFIG.slapSounds[i]);
+            slapSounds.push(buffer);
         } catch (error) {
-            console.error(`❌ Error loading sound ${i + 1}:`, error);
+            console.error(`Error loading slap sound ${i + 1}:`, error);
         }
     }
     
     // Load explosion sound
     try {
-        const response = await fetch(explosionSoundPath);
-        const arrayBuffer = await response.arrayBuffer();
-        explosionSound = await audioContext.decodeAudioData(arrayBuffer);
-        console.log('✅ Loaded explosion sound');
+        explosionSound = await loadAudioFile(AUDIO_CONFIG.explosionSound);
     } catch (error) {
-        console.error('❌ Error loading explosion sound:', error);
+        console.error('Error loading explosion sound:', error);
     }
 }
 
-// Function to play slap sounds with modulation
+/**
+ * Play a slap/smack sound with randomized modulation for variety
+ * @param {number} intensity - Volume intensity (0-1)
+ */
 function playSmackSound(intensity = 1.0) {
-    if (slapSounds.length === 0) {
-        console.log('Sounds not loaded yet...');
-        return;
-    }
+    if (slapSounds.length === 0) return;
     
     const now = audioContext.currentTime;
     
@@ -61,24 +72,27 @@ function playSmackSound(intensity = 1.0) {
     source.buffer = randomSound;
     
     // Add pitch/speed variation for variety
-    const pitchVariation = 0.85 + Math.random() * 0.3; // Random pitch between 0.85x and 1.15x
+    const pitchVariation = AUDIO_CONFIG.pitchVariationMin + 
+        Math.random() * (AUDIO_CONFIG.pitchVariationMax - AUDIO_CONFIG.pitchVariationMin);
     source.playbackRate.value = pitchVariation;
     
     // Create gain node for volume control
     const gainNode = audioContext.createGain();
     gainNode.gain.setValueAtTime(intensity * 0.7, now);
     
-    // Optional: Add a high-shelf EQ for brightness control
+    // Add a high-shelf EQ for brightness control
     const highShelf = audioContext.createBiquadFilter();
     highShelf.type = 'highshelf';
-    highShelf.frequency.value = 2000;
-    highShelf.gain.value = 3 + Math.random() * 3; // Random brightness boost 3-6dB
+    highShelf.frequency.value = AUDIO_CONFIG.highShelfFrequency;
+    highShelf.gain.value = AUDIO_CONFIG.highShelfGainMin + 
+        Math.random() * (AUDIO_CONFIG.highShelfGainMax - AUDIO_CONFIG.highShelfGainMin);
     
-    // Optional: Add a slight low-pass variation for tonal variety
+    // Add a slight low-pass variation for tonal variety
     const lowpass = audioContext.createBiquadFilter();
     lowpass.type = 'lowpass';
-    lowpass.frequency.value = 8000 + Math.random() * 4000; // Random cutoff 8-12kHz
-    lowpass.Q.value = 0.7;
+    lowpass.frequency.value = AUDIO_CONFIG.lowpassFrequencyMin + 
+        Math.random() * (AUDIO_CONFIG.lowpassFrequencyMax - AUDIO_CONFIG.lowpassFrequencyMin);
+    lowpass.Q.value = AUDIO_CONFIG.lowpassQ;
     
     // Connect the audio graph
     source.connect(lowpass);
@@ -87,17 +101,15 @@ function playSmackSound(intensity = 1.0) {
     gainNode.connect(audioContext.destination);
     
     // Play the sound with offset to skip silent beginning
-    // Typical slap sounds have ~0.05-0.1s of silence at the start
-    const silentOffset = 0.08; // Skip first 80ms
-    source.start(now, silentOffset);
+    source.start(now, AUDIO_CONFIG.silentOffset);
 }
 
-// Function to play explosion sound
+/**
+ * Play the explosion sound effect
+ * @param {number} intensity - Volume intensity (0-1)
+ */
 function playExplosionSound(intensity = 1.0) {
-    if (!explosionSound) {
-        console.log('Explosion sound not loaded yet...');
-        return;
-    }
+    if (!explosionSound) return;
     
     const now = audioContext.currentTime;
     

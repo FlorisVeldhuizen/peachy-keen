@@ -1,9 +1,21 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-// Generate a procedural normal map for smooth peach skin texture
+// Texture generation constants
+const NORMAL_MAP_SIZE = 512;
+const NORMAL_MAP_OCTAVES = 4;
+const NORMAL_MAP_HEIGHT_SCALE = 0.3;
+
+// Model constants
+const TARGET_MODEL_HEIGHT = 3;
+const MODEL_ROTATION_DEGREES = 300;
+
+/**
+ * Generate a procedural normal map for smooth peach skin texture
+ * @returns {THREE.CanvasTexture} Generated normal map texture
+ */
 function generatePeachNormalMap() {
-    const size = 512;
+    const size = NORMAL_MAP_SIZE;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
@@ -22,13 +34,13 @@ function generatePeachNormalMap() {
         return random(x * 12.9898 + y * 78.233);
     };
     
-    // Multi-octave noise for detail
+    // Multi-octave noise for detail (Fractal Brownian Motion)
     const fbm = (x, y) => {
         let value = 0;
         let amplitude = 1;
         let frequency = 1;
         
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < NORMAL_MAP_OCTAVES; i++) {
             value += amplitude * noise(x * frequency, y * frequency);
             amplitude *= 0.5;
             frequency *= 2;
@@ -42,10 +54,9 @@ function generatePeachNormalMap() {
             const idx = (y * size + x) * 4;
             
             // Sample neighboring pixels for height
-            const heightScale = 0.3;
-            const h0 = fbm(x / size, y / size) * heightScale;
-            const h1 = fbm((x + 1) / size, y / size) * heightScale;
-            const h2 = fbm(x / size, (y + 1) / size) * heightScale;
+            const h0 = fbm(x / size, y / size) * NORMAL_MAP_HEIGHT_SCALE;
+            const h1 = fbm((x + 1) / size, y / size) * NORMAL_MAP_HEIGHT_SCALE;
+            const h2 = fbm(x / size, (y + 1) / size) * NORMAL_MAP_HEIGHT_SCALE;
             
             // Calculate normal from height differences
             const dx = h1 - h0;
@@ -75,13 +86,14 @@ function generatePeachNormalMap() {
     texture.wrapT = THREE.RepeatWrapping;
     texture.needsUpdate = true;
     
-    console.log('🎨 Generated peach normal map texture');
     return texture;
 }
 
-// Function to create a procedural peach as fallback
+/**
+ * Create a procedural peach as fallback when GLTF model fails to load
+ * @returns {Object} Object containing meshes array and leaf mesh
+ */
 function createProceduralPeach() {
-    console.log('🍑 Creating procedural peach...');
     
     // Peach body (sphere with deformations)
     const peachGeometry = new THREE.SphereGeometry(1.5, 64, 64);
@@ -155,12 +167,14 @@ function createProceduralPeach() {
     leaf.position.y = 0.9;
     leaf.rotation.x = -0.3;
     
-    console.log('✅ Procedural peach created!');
-    
     return { meshes: [peachMesh], leaf };
 }
 
-// Load the peach model
+/**
+ * Load the peach GLTF model, with fallback to procedural generation
+ * @param {THREE.Group} peachGroup - The group to add the peach to
+ * @param {Function} onMeshesLoaded - Callback function when meshes are loaded
+ */
 export function loadPeachModel(peachGroup, onMeshesLoaded) {
     const loader = new GLTFLoader();
     const normalMap = generatePeachNormalMap();
@@ -170,15 +184,13 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
         (gltf) => {
             const model = gltf.scene;
             
-            console.log('🍑 Peach model loaded from GLTF!');
-            
             // Get the bounding box to understand the model size
             const box = new THREE.Box3().setFromObject(model);
             const size = box.getSize(new THREE.Vector3());
             const center = box.getCenter(new THREE.Vector3());
             
-            // Scale the model to be about 3 units tall (1.5x bigger)
-            const scaleFactor = 3 / size.y;
+            // Scale the model to target height
+            const scaleFactor = TARGET_MODEL_HEIGHT / size.y;
             model.scale.set(scaleFactor, scaleFactor, scaleFactor);
             
             // Recalculate box after scaling
@@ -189,14 +201,13 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             model.position.sub(center);
             
             // Rotate the peach to face the camera nicely - crease towards user
-            model.rotation.y = (300 * Math.PI) / 180; // 200 degrees
+            model.rotation.y = (MODEL_ROTATION_DEGREES * Math.PI) / 180;
             
             // Store all meshes for raycasting
             const meshes = [];
             model.traverse((child) => {
                 if (child.isMesh) {
                     meshes.push(child);
-                    console.log('Found mesh:', child.name);
                     
                     // Don't recompute normals - use the ones from the GLTF file
                     // (The model has duplicate vertices at UV seams, so computeVertexNormals
@@ -216,12 +227,10 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             
             peachGroup.add(model);
             onMeshesLoaded(meshes);
-            console.log('✅ Peach is ready to be smacked!');
         },
         undefined,
         (error) => {
-            console.warn('⚠️ Could not load GLTF model (missing scene.bin file?), using procedural peach instead');
-            console.error('Error details:', error);
+            console.error('Could not load GLTF model, using procedural peach instead:', error);
             
             const { meshes, leaf } = createProceduralPeach();
             peachGroup.add(meshes[0]);

@@ -6,6 +6,10 @@ import { setupLighting } from './lighting.js';
 import { initInteraction, setPeachMesh, updatePeachPhysics } from './interaction.js';
 import { initScene, setupResizeHandler } from './scene.js';
 
+// Constants
+const TARGET_FPS = 60;
+const FIXED_DELTA = 1 / TARGET_FPS;
+
 // Initialize audio
 loadSounds();
 
@@ -36,14 +40,15 @@ loadPeachModel(peachGroup, (meshes) => {
 // Setup window resize handler
 setupResizeHandler(camera, renderer, backgroundMaterial);
 
-// Idle floating animation timer
+// Animation loop with clock for accurate timing
+const clock = new THREE.Clock();
 let idleTime = 0;
 
-// Animation loop
 function animate() {
     requestAnimationFrame(animate);
     
-    const delta = 0.016; // ~60fps
+    // Use clock for accurate delta time (capped to avoid large jumps)
+    const delta = Math.min(clock.getDelta(), 0.1);
     idleTime += delta;
     
     // Update background shader

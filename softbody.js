@@ -5,8 +5,21 @@ import * as THREE from 'three';
  * Applies spring-mass dynamics to vertices for realistic deformation
  */
 
+// Physics constants
+const VERTEX_POSITION_TOLERANCE = 0.0001;
+const PROXIMITY_THRESHOLD = 0.3;
+const PROXIMITY_SAMPLING_STEP_DIVISOR = 100;
+const SETTLE_THRESHOLD = 0.01;
+const MAX_VELOCITY_CAP = 0.5;
+const MAX_VELOCITY_CAP_SINGLE = 0.25;
+const NORMAL_RECALC_INTERVAL = 3;
+
 export class SoftBodyPhysics {
     constructor(mesh) {
+        if (!mesh || !mesh.geometry) {
+            throw new Error('SoftBodyPhysics: Invalid mesh provided');
+        }
+        
         this.mesh = mesh;
         this.geometry = mesh.geometry.clone(); // Clone to avoid modifying original
         this.mesh.geometry = this.geometry; // Use the clone
@@ -21,11 +34,11 @@ export class SoftBodyPhysics {
         this.vertexGroups = []; // Maps each vertex to its group of duplicates
         
         // Physics parameters - tuned for peachy jiggle!
-        this.stiffness = 0.25;      // Spring stiffness (higher = less jiggly)
+        this.stiffness = 0.45;      // Spring stiffness (higher = firmer, less jiggly)
         this.damping = 0.90;        // Velocity damping (higher = less bouncy)
         this.mass = 1.8;            // Vertex mass (higher = slower response)
         this.propagation = 0.25;    // Force propagation to neighbors
-        this.maxDisplacement = 0.16; // Maximum distance a vertex can move from original
+        this.maxDisplacement = 0.12; // Maximum distance a vertex can move from original (reduced for firmness)
         this.timeScale = 0.75;      // Global time scale for physics (lower = slower)
         
         this.initialized = false;
@@ -42,6 +55,11 @@ export class SoftBodyPhysics {
     }
     init() {
         const positions = this.geometry.attributes.position;
+        
+        if (!positions) {
+            console.error('SoftBodyPhysics: No position attribute found');
+            return;
+        }
         
         // Store original positions and initialize physics arrays
         for (let i = 0; i < positions.count; i++) {
@@ -61,12 +79,11 @@ export class SoftBodyPhysics {
         this.buildNeighborMap();
         
         this.initialized = true;
-        console.log('✨ Soft body physics initialized for', positions.count, 'vertices');
     }
     
     buildVertexGroups() {
         // Group vertices that share the same position (within tolerance)
-        const tolerance = 0.0001;
+        const tolerance = VERTEX_POSITION_TOLERANCE;
         const positions = this.geometry.attributes.position;
         const posArray = positions.array;
         const positionMap = new Map();
@@ -107,8 +124,6 @@ export class SoftBodyPhysics {
                 }
             }
         }
-        
-        console.log(`🔗 Found ${groupCount} vertex groups (duplicate positions that will move together)`);
     }
     
     buildNeighborMap() {
@@ -136,15 +151,13 @@ export class SoftBodyPhysics {
             this.addNeighbor(c, a);
             this.addNeighbor(c, b);
         }
-        
-        console.log('🔗 Built neighbor map for soft body physics');
     }
     
     buildProximityNeighbors() {
         // Fallback: use proximity-based neighbors
         const positions = this.geometry.attributes.position;
         const posArray = positions.array;
-        const threshold = 0.3; // Distance threshold for neighbors
+        const threshold = PROXIMITY_THRESHOLD;
         const thresholdSq = threshold * threshold; // Use squared distance (faster)
         
         for (let i = 0; i < positions.count; i++) {
@@ -155,7 +168,7 @@ export class SoftBodyPhysics {
             const iz = posArray[i3 + 2];
             
             // Only check a subset to avoid O(n²) complexity
-            const step = Math.max(1, Math.floor(positions.count / 100));
+            const step = Math.max(1, Math.floor(positions.count / PROXIMITY_SAMPLING_STEP_DIVISOR));
             for (let j = 0; j < positions.count; j += step) {
                 if (i === j) continue;
                 
@@ -187,6 +200,8 @@ export class SoftBodyPhysics {
     }
     
     applyImpulse(worldPoint, worldDirection, force) {
+        if (!this.initialized) return;
+        
         // Apply an impulse at a specific point on the mesh
         // This creates the initial jiggle from the smack
         
@@ -228,8 +243,8 @@ export class SoftBodyPhysics {
                 this.vertexVelocities[i].add(this.tempVec3);
                 
                 // Clamp velocity to prevent explosion
-                const maxVelocity = 0.5;
                 const velLength = this.vertexVelocities[i].length();
+                const maxVelocity = MAX_VELOCITY_CAP;
                 if (velLength > maxVelocity) {
                     this.vertexVelocities[i].multiplyScalar(maxVelocity / velLength);
                 }
@@ -280,10 +295,6 @@ export class SoftBodyPhysics {
             this.isActive = false;
             return;
         }
-        
-        // Check if motion has actually settled
-        const maxVelocity = this.getMaxVelocity();
-        const maxDisplacement = this.getMaxDisplacement();
         
         this.frameCount++;
         const positions = this.geometry.attributes.position;
@@ -365,8 +376,8 @@ export class SoftBodyPhysics {
                 this.vertexVelocities[representative].multiplyScalar(this.damping * dampingMultiplier);
                 
                 // Clamp velocity
-                const maxVelocity = 0.3;
                 const velLength = this.vertexVelocities[representative].length();
+                const maxVelocity = MAX_VELOCITY_CAP;
                 if (velLength > maxVelocity) {
                     this.vertexVelocities[representative].multiplyScalar(maxVelocity / velLength);
                 }
@@ -412,8 +423,8 @@ export class SoftBodyPhysics {
                 this.vertexVelocities[i].add(this.tempVec1);
                 this.vertexVelocities[i].multiplyScalar(this.damping * dampingMultiplier);
                 
-                const maxVelocity = 0.25; // Slightly lower max velocity
                 const velLength = this.vertexVelocities[i].length();
+                const maxVelocity = MAX_VELOCITY_CAP_SINGLE;
                 if (velLength > maxVelocity) {
                     this.vertexVelocities[i].multiplyScalar(maxVelocity / velLength);
                 }
@@ -448,9 +459,9 @@ export class SoftBodyPhysics {
         // Mark geometry as needing update
         positions.needsUpdate = true;
         
-        // Only recalculate normals every 3 frames (huge performance boost!)
+        // Only recalculate normals every N frames (huge performance boost!)
         // EXCEPT when lerp is complete (at original position) - then always recalculate for correct final state
-        if (this.frameCount % 3 === 0 || lerpAmount >= 1.0) {
+        if (this.frameCount % NORMAL_RECALC_INTERVAL === 0 || lerpAmount >= 1.0) {
             this.geometry.computeVertexNormals();
         }
     }

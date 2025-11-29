@@ -1,9 +1,17 @@
 import * as THREE from 'three';
 
-// Setup all scene lighting with angled, dramatic three-point lighting
+/**
+ * Setup all scene lighting with angled, dramatic three-point lighting
+ * @param {THREE.Scene} scene - The scene to add lights to
+ */
 export function setupLighting(scene) {
+    if (!scene) {
+        console.error('setupLighting: No scene provided');
+        return;
+    }
+    
     // Lighting - Angled for form definition
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15); // Low ambient for contrast
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Brighter ambient for visibility
     scene.add(ambientLight);
 
     // Key light at 45 degrees from upper left - classic three-point lighting angle

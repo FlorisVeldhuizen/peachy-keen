@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 
-// Reaction-diffusion liquid background shader (window-filling)
+/**
+ * Create the animated background shader material
+ * @returns {THREE.ShaderMaterial} The background shader material
+ */
 export function createBackgroundMaterial() {
     return new THREE.ShaderMaterial({
         uniforms: {
