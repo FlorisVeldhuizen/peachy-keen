@@ -1,0 +1,21 @@
+{
+  "name": "peachy-keen",
+  "version": "1.0.0",
+  "description": "Interactive 3D peach with psychedelic background",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["threejs", "webgl", "interactive"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.159.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
+
