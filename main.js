@@ -1,6 +1,83 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
+// Audio context for sound effects
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+// Load slap sound effects
+const slapSounds = [];
+const slapSoundPaths = [
+    '/assets/Slap sound effect 1.mp3',
+    '/assets/Slap sound effect 2.mp3',
+    '/assets/Slap sound effect 3.mp3'
+];
+
+// Load all sound files
+async function loadSounds() {
+    for (let i = 0; i < slapSoundPaths.length; i++) {
+        try {
+            const response = await fetch(slapSoundPaths[i]);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            slapSounds.push(audioBuffer);
+            console.log(`✅ Loaded sound ${i + 1}`);
+        } catch (error) {
+            console.error(`❌ Error loading sound ${i + 1}:`, error);
+        }
+    }
+}
+
+// Initialize sounds
+loadSounds();
+
+// Function to play slap sounds with modulation
+function playSmackSound(intensity = 1.0) {
+    if (slapSounds.length === 0) {
+        console.log('Sounds not loaded yet...');
+        return;
+    }
+    
+    const now = audioContext.currentTime;
+    
+    // Randomly select one of the loaded sounds
+    const randomSound = slapSounds[Math.floor(Math.random() * slapSounds.length)];
+    
+    // Create buffer source
+    const source = audioContext.createBufferSource();
+    source.buffer = randomSound;
+    
+    // Add pitch/speed variation for variety
+    const pitchVariation = 0.85 + Math.random() * 0.3; // Random pitch between 0.85x and 1.15x
+    source.playbackRate.value = pitchVariation;
+    
+    // Create gain node for volume control
+    const gainNode = audioContext.createGain();
+    gainNode.gain.setValueAtTime(intensity * 0.7, now);
+    
+    // Optional: Add a high-shelf EQ for brightness control
+    const highShelf = audioContext.createBiquadFilter();
+    highShelf.type = 'highshelf';
+    highShelf.frequency.value = 2000;
+    highShelf.gain.value = 3 + Math.random() * 3; // Random brightness boost 3-6dB
+    
+    // Optional: Add a slight low-pass variation for tonal variety
+    const lowpass = audioContext.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 8000 + Math.random() * 4000; // Random cutoff 8-12kHz
+    lowpass.Q.value = 0.7;
+    
+    // Connect the audio graph
+    source.connect(lowpass);
+    lowpass.connect(highShelf);
+    highShelf.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Play the sound with offset to skip silent beginning
+    // Typical slap sounds have ~0.05-0.1s of silence at the start
+    const silentOffset = 0.08; // Skip first 80ms
+    source.start(now, silentOffset);
+}
+
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -199,33 +276,54 @@ loader.load(
     }
 );
 
-// Lighting - Enhanced for better definition
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+// Lighting - Angled for form definition
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.15); // Low ambient for contrast
 scene.add(ambientLight);
 
-// Main directional light from top-right
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-directionalLight.position.set(3, 4, 5);
-scene.add(directionalLight);
+// Key light at 45 degrees from upper left - classic three-point lighting angle
+const keyLight = new THREE.DirectionalLight(0xffffff, 3.5);
+keyLight.position.set(-5, 6, 5); // Angled from side for better form definition
+keyLight.castShadow = true;
+scene.add(keyLight);
 
-// Fill light from left to reduce harsh shadows
-const fillLight = new THREE.DirectionalLight(0xffd9b3, 0.6);
-fillLight.position.set(-3, 2, 3);
+// Fill light from opposite side at lower angle
+const fillLight = new THREE.DirectionalLight(0xffd9b3, 0.5);
+fillLight.position.set(4, 1, 3); // Lower and from the right
 scene.add(fillLight);
 
-// Rim light from behind for edge definition
-const rimLight = new THREE.PointLight(0xffaaaa, 2, 100);
-rimLight.position.set(0, 0, -3);
+// Strong rim light from behind-top to separate the peach from background
+const rimLight = new THREE.PointLight(0xffffff, 4.5, 100);
+rimLight.position.set(1, 3, -5); // Higher and more angled
 scene.add(rimLight);
 
+// Side accent lights at grazing angles to reveal curves and crease
+const leftCreaseLight = new THREE.PointLight(0xffddaa, 2.0, 100);
+leftCreaseLight.position.set(-4, 0.5, 3); // More from the side, slight height
+scene.add(leftCreaseLight);
+
+const rightCreaseLight = new THREE.PointLight(0xffddaa, 2.0, 100);
+rightCreaseLight.position.set(4, 0.5, 3); // Mirror from right side
+scene.add(rightCreaseLight);
+
+// Bottom light to lift shadows slightly and show bottom curves
+const bottomLight = new THREE.PointLight(0xffccaa, 0.8, 100);
+bottomLight.position.set(0, -3, 2);
+scene.add(bottomLight);
+
 // Accent lights for the psychedelic effect
-const pointLight1 = new THREE.PointLight(0xff69b4, 0.8, 100);
+const pointLight1 = new THREE.PointLight(0xff69b4, 1.2, 100);
 pointLight1.position.set(-5, -5, 5);
 scene.add(pointLight1);
 
-const pointLight2 = new THREE.PointLight(0x00ffff, 0.6, 100);
+const pointLight2 = new THREE.PointLight(0x00ffff, 0.9, 100);
 pointLight2.position.set(5, -3, 4);
 scene.add(pointLight2);
+
+// Enable shadows and tone mapping for dramatic contrast
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.5;
 
 // Physics and interaction variables
 const peachState = {
@@ -276,6 +374,10 @@ function onMouseClick(event) {
         );
         
         peachState.isWobbling = true;
+        
+        // Play smack sound with varying intensity
+        const intensity = 0.7 + Math.random() * 0.3;
+        playSmackSound(intensity);
     }
 }
 
