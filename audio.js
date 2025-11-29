@@ -4,9 +4,9 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Load slap sound effects
 const slapSounds = [];
 const slapSoundPaths = [
-    '/assets/Slap sound effect 1.mp3',
-    '/assets/Slap sound effect 2.mp3',
-    '/assets/Slap sound effect 3.mp3'
+    '/assets/Slap sound effect 1.m4a',
+    '/assets/Slap sound effect 2.m4a',
+    '/assets/Slap sound effect 3.m4a'
 ];
 
 // Load all sound files
