@@ -23,7 +23,10 @@ const mouseState = {
     lastPosition: { x: 0, y: 0 },
     velocity: { x: 0, y: 0 },
     lastSmackTime: 0,
-    smackCooldown: 200 // ms between smacks
+    smackCooldown: 200, // ms between smacks
+    // Velocity history for smoothing (store last N frames)
+    velocityHistory: [],
+    maxHistorySize: 5 // Average over 5 frames for smooth direction
 };
 
 // Raycaster for mouse interaction
@@ -87,6 +90,18 @@ function onMouseMove(event) {
     mouseState.velocity.x = mouseState.position.x - mouseState.lastPosition.x;
     mouseState.velocity.y = mouseState.position.y - mouseState.lastPosition.y;
     
+    // Store velocity in history for smoothing
+    mouseState.velocityHistory.push({
+        x: mouseState.velocity.x,
+        y: mouseState.velocity.y,
+        time: Date.now()
+    });
+    
+    // Keep only recent history
+    if (mouseState.velocityHistory.length > mouseState.maxHistorySize) {
+        mouseState.velocityHistory.shift();
+    }
+    
     // Update normalized mouse coordinates for raycasting
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -110,10 +125,23 @@ function checkHoverSmack() {
     const intersects = raycaster.intersectObjects(meshesToCheck, true);
     
     if (intersects.length > 0) {
-        // Calculate velocity magnitude
+        // Calculate average velocity from history for smoother, more accurate direction
+        let avgVelocityX = 0;
+        let avgVelocityY = 0;
+        
+        if (mouseState.velocityHistory.length > 0) {
+            for (const vel of mouseState.velocityHistory) {
+                avgVelocityX += vel.x;
+                avgVelocityY += vel.y;
+            }
+            avgVelocityX /= mouseState.velocityHistory.length;
+            avgVelocityY /= mouseState.velocityHistory.length;
+        }
+        
+        // Calculate velocity magnitude from averaged values
         const velocityMagnitude = Math.sqrt(
-            mouseState.velocity.x * mouseState.velocity.x + 
-            mouseState.velocity.y * mouseState.velocity.y
+            avgVelocityX * avgVelocityX + 
+            avgVelocityY * avgVelocityY
         );
         
         // Only smack if moving fast enough (minimum threshold)
@@ -122,7 +150,8 @@ function checkHoverSmack() {
         
         mouseState.lastSmackTime = currentTime;
         
-        console.log('🍑 SMACK! Velocity:', velocityMagnitude.toFixed(2));
+        console.log('🍑 SMACK! Velocity:', velocityMagnitude.toFixed(2), 
+                    'Direction:', avgVelocityX.toFixed(1), avgVelocityY.toFixed(1));
         
         // Add smack animation to cursor
         if (handCursor) {
@@ -132,15 +161,19 @@ function checkHoverSmack() {
             setTimeout(() => handCursor.classList.remove('smacking'), 200);
         }
         
-        // Calculate smack direction
-        const intersectPoint = intersects[0].point;
-        const direction = intersectPoint.clone().sub(peachGroup.position).normalize();
+        // Convert 2D screen velocity to 3D world direction
+        // Normalize the velocity to get direction
+        const velocityDir = new THREE.Vector2(avgVelocityX, avgVelocityY).normalize();
         
-        // Invert X and Y so peach moves away from where you hit it
-        direction.x *= -1;
-        direction.y *= -1;
-        // Keep Z positive (toward camera)
-        direction.z = Math.abs(direction.z);
+        // Map screen space to world space direction
+        // X: right is positive (keep as is)
+        // Y: down is positive in screen space, but up is positive in 3D (invert)
+        // Z: push towards camera for satisfying movement
+        const direction = new THREE.Vector3(
+            velocityDir.x,      // Horizontal movement matches screen
+            -velocityDir.y,     // Vertical inverted (screen Y is flipped)
+            0.4                 // Always push a bit toward camera for nice effect
+        ).normalize();
         
         // Scale force based on velocity (faster movement = harder hit)
         const velocityScale = Math.min(velocityMagnitude / 20, 3); // Cap at 3x
@@ -156,8 +189,9 @@ function checkHoverSmack() {
         
         peachState.isWobbling = true;
         
-        // Apply soft body impulse for jiggle effect (subtle and slow!)
-        const jiggleForce = 0.12 * velocityScale; // Force for vertex deformation
+        // Apply soft body impulse for jiggle effect at the intersection point
+        const intersectPoint = intersects[0].point;
+        const jiggleForce = 0.18 * velocityScale; // Force for vertex deformation
         peachState.softBodies.forEach(softBody => {
             softBody.applyImpulse(intersectPoint, direction.clone(), jiggleForce);
         });
@@ -178,6 +212,23 @@ export function updatePeachPhysics(delta, idleTime) {
     });
     
     if (peachState.isWobbling) {
+        // Check how close we are to settling
+        const velocityLength = peachState.velocity.length();
+        const angularVelLength = peachState.angularVelocity.length();
+        const settleThreshold = 0.01;
+        
+        // Calculate blend factor for smooth transition to idle - synchronized with softbody lerping
+        const blendStart = 0.15; // Start blending earlier when velocity < 0.15 (extended range)
+        let idleBlend = 0;
+        if (velocityLength < blendStart || angularVelLength < blendStart) {
+            // Map velocity from [0, blendStart] to blend [1, 0]
+            const velFactor = Math.max(velocityLength, angularVelLength);
+            let t = 1.0 - (velFactor / blendStart);
+            t = Math.max(0, Math.min(1, t));
+            // Use same ease in-out curve as softbody for synchronized feel
+            idleBlend = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+        
         // Apply velocity
         peachGroup.position.add(peachState.velocity.clone().multiplyScalar(delta));
         
@@ -186,24 +237,39 @@ export function updatePeachPhysics(delta, idleTime) {
         peachGroup.rotation.y += peachState.angularVelocity.y * delta;
         peachGroup.rotation.z += peachState.angularVelocity.z * delta;
         
-        // Apply damping
-        peachState.velocity.multiplyScalar(damping);
-        peachState.angularVelocity.multiplyScalar(angularDamping);
+        // Apply damping (increase damping as we blend to idle for smoother transition)
+        const blendedDamping = damping - (idleBlend * 0.03); // Slightly more damping during transition
+        const blendedAngularDamping = angularDamping - (idleBlend * 0.05);
+        peachState.velocity.multiplyScalar(blendedDamping);
+        peachState.angularVelocity.multiplyScalar(blendedAngularDamping);
         
         // Return to default position
         const toDefault = peachState.defaultPosition.clone().sub(peachGroup.position);
         peachState.velocity.add(toDefault.multiplyScalar(returnForce));
         
-        // Return to default rotation gradually
-        peachGroup.rotation.x += (peachState.defaultRotation.x - peachGroup.rotation.x) * 0.05;
-        peachGroup.rotation.y += (peachState.defaultRotation.y - peachGroup.rotation.y) * 0.05;
-        peachGroup.rotation.z += (peachState.defaultRotation.z - peachGroup.rotation.z) * 0.05;
+        // Return to default rotation gradually (faster as we approach idle)
+        const rotationBlend = 0.05 + (idleBlend * 0.05);
+        peachGroup.rotation.x += (peachState.defaultRotation.x - peachGroup.rotation.x) * rotationBlend;
+        peachGroup.rotation.y += (peachState.defaultRotation.y - peachGroup.rotation.y) * rotationBlend;
+        peachGroup.rotation.z += (peachState.defaultRotation.z - peachGroup.rotation.z) * rotationBlend;
+        
+        // Blend towards idle animation position as we settle (more gradual)
+        if (idleBlend > 0) {
+            const targetIdleY = Math.sin(idleTime * 1.5) * 0.2;
+            const targetIdleRotY = Math.sin(idleTime * 0.5) * 0.3;
+            
+            // Gradually blend over time - use smaller multiplier for very subtle transition
+            const blendStrength = idleBlend * 0.05;
+            peachGroup.position.y += (targetIdleY - peachGroup.position.y) * blendStrength;
+            peachGroup.rotation.y += (targetIdleRotY - peachGroup.rotation.y) * blendStrength;
+        }
         
         // Check if peach has settled
-        if (peachState.velocity.length() < 0.01 && peachState.angularVelocity.length() < 0.01) {
+        if (velocityLength < settleThreshold && angularVelLength < settleThreshold) {
             peachState.isWobbling = false;
             peachState.velocity.set(0, 0, 0);
             peachState.angularVelocity.set(0, 0, 0);
+            // Position should already be very close to idle animation from blending
         }
     } else {
         // Idle floating animation

@@ -115,6 +115,15 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
                 if (child.isMesh) {
                     meshes.push(child);
                     console.log('Found mesh:', child.name);
+                    
+                    // Recompute smooth vertex normals (this interpolates normals across the surface)
+                    child.geometry.computeVertexNormals();
+                    
+                    // Force smooth shading on the material
+                    if (child.material) {
+                        child.material.flatShading = false;
+                        child.material.needsUpdate = true;
+                    }
                 }
             });
             

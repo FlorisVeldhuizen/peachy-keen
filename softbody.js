@@ -20,13 +20,13 @@ export class SoftBodyPhysics {
         // This prevents tearing while preserving UVs and other attributes
         this.vertexGroups = []; // Maps each vertex to its group of duplicates
         
-        // Physics parameters - tuned for subtle, slow peachy jiggle!
-        this.stiffness = 0.3;       // Spring stiffness (higher = less jiggly)
-        this.damping = 0.92;        // Velocity damping (higher = less bouncy)
-        this.mass = 2.0;            // Vertex mass (higher = slower response)
-        this.propagation = 0.2;     // Force propagation to neighbors
-        this.maxDisplacement = 0.12; // Maximum distance a vertex can move from original
-        this.timeScale = 0.7;       // Global time scale for physics (lower = slower)
+        // Physics parameters - tuned for peachy jiggle!
+        this.stiffness = 0.25;      // Spring stiffness (higher = less jiggly)
+        this.damping = 0.90;        // Velocity damping (higher = less bouncy)
+        this.mass = 1.8;            // Vertex mass (higher = slower response)
+        this.propagation = 0.25;    // Force propagation to neighbors
+        this.maxDisplacement = 0.16; // Maximum distance a vertex can move from original
+        this.timeScale = 0.75;      // Global time scale for physics (lower = slower)
         
         this.initialized = false;
         this.isActive = false;      // Only compute when needed
@@ -191,7 +191,7 @@ export class SoftBodyPhysics {
         // This creates the initial jiggle from the smack
         
         this.isActive = true;
-        this.activityTimer = 2.5; // Stay active for 2.5 seconds
+        this.activityTimer = 3.5; // Stay active for 3.5 seconds (extended to allow for longer transition)
         this.frameCount = 0; // Reset frame count
         
         // Transform world space to local space (reuse temp vectors)
@@ -242,9 +242,36 @@ export class SoftBodyPhysics {
         
         // Countdown activity timer
         this.activityTimer -= delta;
+        
+        // Gradually increase damping as we approach timeout for smooth settle
+        const fadeOutTime = 1.0; // Start fading out in the last 1.0 seconds (extended)
+        let dampingMultiplier = 1.0;
+        if (this.activityTimer < fadeOutTime) {
+            // Smoothly increase damping to help settle naturally
+            dampingMultiplier = 0.88 + (this.activityTimer / fadeOutTime) * 0.12;
+        }
+        
+        // Smoothly lerp vertices back to original over a longer period
+        const lerpStartTime = 1.0; // Start lerping in the last 1.0 seconds (extended and synchronized)
+        let lerpAmount = 0;
+        if (this.activityTimer < lerpStartTime) {
+            // Gradually increase lerp from 0 to 1 as we approach the end
+            // Use easeInOut curve for smoother transition
+            let t = 1.0 - (this.activityTimer / lerpStartTime);
+            t = Math.min(t, 1.0);
+            // Ease in-out: smooth at both ends
+            lerpAmount = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+        
+        // Check if motion has actually settled
+        const maxVelocity = this.getMaxVelocity();
+        const maxDisplacement = this.getMaxDisplacement();
+        
         if (this.activityTimer <= 0) {
+            // Timer expired - deactivate regardless of motion (it should be minimal by now)
             this.isActive = false;
-            this.resetToOriginal();
+            // Ensure we're exactly at original positions
+            this.resetToOriginalImmediate();
             return;
         }
         
@@ -324,8 +351,8 @@ export class SoftBodyPhysics {
                 this.tempVec1.copy(avgForce).multiplyScalar(delta * 60 * this.timeScale);
                 this.vertexVelocities[representative].add(this.tempVec1);
                 
-                // Apply damping
-                this.vertexVelocities[representative].multiplyScalar(this.damping);
+                // Apply damping (with fade-out multiplier)
+                this.vertexVelocities[representative].multiplyScalar(this.damping * dampingMultiplier);
                 
                 // Clamp velocity
                 const maxVelocity = 0.3;
@@ -354,6 +381,12 @@ export class SoftBodyPhysics {
                 for (const idx of group) {
                     const offset = this.originalPositions[idx].clone().sub(this.originalPositions[representative]);
                     const finalPos = this.tempVec1.clone().add(offset);
+                    
+                    // Apply lerp towards original position if we're in the fade-out phase
+                    if (lerpAmount > 0) {
+                        finalPos.lerp(this.originalPositions[idx], lerpAmount);
+                    }
+                    
                     const idx3 = idx * 3;
                     posArray[idx3] = finalPos.x;
                     posArray[idx3 + 1] = finalPos.y;
@@ -365,7 +398,7 @@ export class SoftBodyPhysics {
                 // Single vertex, process normally (reuse temp vectors)
                 this.tempVec1.copy(this.vertexForces[i]).divideScalar(this.mass).multiplyScalar(delta * 60 * this.timeScale);
                 this.vertexVelocities[i].add(this.tempVec1);
-                this.vertexVelocities[i].multiplyScalar(this.damping);
+                this.vertexVelocities[i].multiplyScalar(this.damping * dampingMultiplier);
                 
                 const maxVelocity = 0.25; // Slightly lower max velocity
                 const velLength = this.vertexVelocities[i].length();
@@ -387,6 +420,11 @@ export class SoftBodyPhysics {
                     this.vertexVelocities[i].multiplyScalar(0.5);
                 }
                 
+                // Apply lerp towards original position if we're in the fade-out phase
+                if (lerpAmount > 0) {
+                    this.tempVec1.lerp(this.originalPositions[i], lerpAmount);
+                }
+                
                 posArray[i3] = this.tempVec1.x;
                 posArray[i3 + 1] = this.tempVec1.y;
                 posArray[i3 + 2] = this.tempVec1.z;
@@ -403,8 +441,33 @@ export class SoftBodyPhysics {
         }
     }
     
-    resetToOriginal() {
-        // Smoothly reset vertices to original positions
+    getMaxVelocity() {
+        // Find the maximum velocity magnitude across all vertices
+        let maxVel = 0;
+        for (let i = 0; i < this.vertexVelocities.length; i++) {
+            const vel = this.vertexVelocities[i].length();
+            if (vel > maxVel) maxVel = vel;
+        }
+        return maxVel;
+    }
+    
+    getMaxDisplacement() {
+        // Find the maximum displacement from original position
+        let maxDisp = 0;
+        const positions = this.geometry.attributes.position;
+        const posArray = positions.array;
+        
+        for (let i = 0; i < positions.count; i++) {
+            const i3 = i * 3;
+            this.tempVec1.set(posArray[i3], posArray[i3 + 1], posArray[i3 + 2]);
+            const disp = this.tempVec1.distanceTo(this.originalPositions[i]);
+            if (disp > maxDisp) maxDisp = disp;
+        }
+        return maxDisp;
+    }
+    
+    resetToOriginalImmediate() {
+        // Immediately reset vertices to original positions (should already be very close via lerping)
         const positions = this.geometry.attributes.position;
         
         for (let i = 0; i < positions.count; i++) {
