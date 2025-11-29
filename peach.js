@@ -1,6 +1,84 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
+// Generate a procedural normal map for smooth peach skin texture
+function generatePeachNormalMap() {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    // Create image data
+    const imageData = ctx.createImageData(size, size);
+    const data = imageData.data;
+    
+    // Noise function for peach fuzz texture
+    const noise = (x, y) => {
+        const random = (n) => {
+            const val = Math.sin(n) * 43758.5453123;
+            return val - Math.floor(val);
+        };
+        return random(x * 12.9898 + y * 78.233);
+    };
+    
+    // Multi-octave noise for detail
+    const fbm = (x, y) => {
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        
+        for (let i = 0; i < 4; i++) {
+            value += amplitude * noise(x * frequency, y * frequency);
+            amplitude *= 0.5;
+            frequency *= 2;
+        }
+        return value;
+    };
+    
+    // Generate normal map data
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const idx = (y * size + x) * 4;
+            
+            // Sample neighboring pixels for height
+            const heightScale = 0.3;
+            const h0 = fbm(x / size, y / size) * heightScale;
+            const h1 = fbm((x + 1) / size, y / size) * heightScale;
+            const h2 = fbm(x / size, (y + 1) / size) * heightScale;
+            
+            // Calculate normal from height differences
+            const dx = h1 - h0;
+            const dy = h2 - h0;
+            
+            // Normal vector (z is always positive for a bump)
+            const nx = -dx;
+            const ny = -dy;
+            const nz = 1.0;
+            
+            // Normalize
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            
+            // Convert to 0-255 range (normal maps store normals as RGB)
+            data[idx] = ((nx / len) * 0.5 + 0.5) * 255;      // R
+            data[idx + 1] = ((ny / len) * 0.5 + 0.5) * 255;  // G
+            data[idx + 2] = ((nz / len) * 0.5 + 0.5) * 255;  // B
+            data[idx + 3] = 255;                              // A
+        }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    // Create texture from canvas
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.needsUpdate = true;
+    
+    console.log('🎨 Generated peach normal map texture');
+    return texture;
+}
+
 // Function to create a procedural peach as fallback
 function createProceduralPeach() {
     console.log('🍑 Creating procedural peach...');
@@ -53,12 +131,15 @@ function createProceduralPeach() {
 
     peachGeometry.computeVertexNormals();
 
+    const normalMap = generatePeachNormalMap();
     const peachMaterial = new THREE.MeshStandardMaterial({
         color: 0xffb347,
         roughness: 0.7,
         metalness: 0.0,
         emissive: 0xff8c42,
-        emissiveIntensity: 0.1
+        emissiveIntensity: 0.1,
+        normalMap: normalMap,
+        normalScale: new THREE.Vector2(0.5, 0.5) // Subtle effect
     });
 
     const peachMesh = new THREE.Mesh(peachGeometry, peachMaterial);
@@ -82,9 +163,10 @@ function createProceduralPeach() {
 // Load the peach model
 export function loadPeachModel(peachGroup, onMeshesLoaded) {
     const loader = new GLTFLoader();
+    const normalMap = generatePeachNormalMap();
     
     loader.load(
-        '/assets/scene.gltf',
+        '/assets/peachy.glb',
         (gltf) => {
             const model = gltf.scene;
             
@@ -106,8 +188,8 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             // Center the model at origin
             model.position.sub(center);
             
-            // Rotate the peach to face the camera nicely
-            model.rotation.y = Math.PI; // 180 degrees
+            // Rotate the peach to face the camera nicely - crease towards user
+            model.rotation.y = (300 * Math.PI) / 180; // 200 degrees
             
             // Store all meshes for raycasting
             const meshes = [];
@@ -116,12 +198,17 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
                     meshes.push(child);
                     console.log('Found mesh:', child.name);
                     
-                    // Recompute smooth vertex normals (this interpolates normals across the surface)
-                    child.geometry.computeVertexNormals();
+                    // Don't recompute normals - use the ones from the GLTF file
+                    // (The model has duplicate vertices at UV seams, so computeVertexNormals
+                    // would create flat shading. The original normals are smooth.)
                     
-                    // Force smooth shading on the material
+                    // Force smooth shading on the material and add normal map with peachy pink tint
                     if (child.material) {
                         child.material.flatShading = false;
+                        child.material.normalMap = normalMap;
+                        child.material.normalScale = new THREE.Vector2(0.5, 0.5); // Subtle effect
+                        // Add peachy pink tint (FFB3BA is a soft peachy pink color)
+                        child.material.color = new THREE.Color(0xFFB3BA);
                         child.material.needsUpdate = true;
                     }
                 }

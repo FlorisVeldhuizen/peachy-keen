@@ -7,7 +7,7 @@ const slapSoundPaths = [
     // '/assets/ass.m4a',
     '/assets/ass2.m4a',
     '/assets/ass3.m4a',
-    '/assets/ass4.m4a',
+    // '/assets/ass4.m4a',
     '/assets/ass5.m4a',
 
     // '/assets/Slap sound effect 1.m4a',

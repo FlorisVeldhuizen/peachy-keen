@@ -37,7 +37,8 @@ const mouseState = {
     smackCooldown: 200, // ms between smacks
     // Velocity history for smoothing (store last N frames)
     velocityHistory: [],
-    maxHistorySize: 5 // Average over 5 frames for smooth direction
+    maxHistorySize: 5, // Average over 5 frames for smooth direction
+    isHoveringPeach: false // Track if cursor is currently over the peach
 };
 
 // Raycaster for mouse interaction
@@ -173,17 +174,29 @@ function checkHoverSmack() {
     if (peachState.isRespawning) return;
     if (peachState.particleExplosion && peachState.particleExplosion.isActive()) return;
     
-    // Cooldown to prevent too many smacks
-    const currentTime = Date.now();
-    if (currentTime - mouseState.lastSmackTime < mouseState.smackCooldown) return;
-    
     raycaster.setFromCamera(mouse, camera);
     
     // Handle both array of meshes (GLTF) and single mesh (procedural)
     const meshesToCheck = Array.isArray(peachMesh) ? peachMesh : [peachMesh];
     const intersects = raycaster.intersectObjects(meshesToCheck, true);
     
-    if (intersects.length > 0) {
+    const isCurrentlyHovering = intersects.length > 0;
+    
+    // Only allow smacking when cursor ENTERS the peach (transition from not hovering to hovering)
+    if (isCurrentlyHovering) {
+        // Check if this is a fresh entry (cursor was not hovering before)
+        if (mouseState.isHoveringPeach) {
+            // Still hovering from before - don't smack
+            return;
+        }
+        
+        // This is a new entry! Check velocity and cooldown
+        const currentTime = Date.now();
+        if (currentTime - mouseState.lastSmackTime < mouseState.smackCooldown) {
+            // Update hover state but don't smack yet
+            mouseState.isHoveringPeach = true;
+            return;
+        }
         // Calculate average velocity from history for smoother, more accurate direction
         let avgVelocityX = 0;
         let avgVelocityY = 0;
@@ -260,6 +273,9 @@ function checkHoverSmack() {
         const intensity = Math.min(0.4 + velocityMagnitude / 30, 1.0);
         playSmackSound(intensity);
         
+        // Mark that we're now hovering (after a successful smack)
+        mouseState.isHoveringPeach = true;
+        
         // Increase rage level based on hit intensity (even smaller increases now!)
         const rageIncrease = 4 + (velocityScale * 3);
         peachState.rageLevel = Math.min(100, peachState.rageLevel + rageIncrease);
@@ -278,6 +294,9 @@ function checkHoverSmack() {
                 updateRageMeter();
             }
         }
+    } else {
+        // Cursor is not hovering - reset hover state
+        mouseState.isHoveringPeach = false;
     }
 }
 
