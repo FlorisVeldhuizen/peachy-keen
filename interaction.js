@@ -156,8 +156,8 @@ function checkHoverSmack() {
         
         peachState.isWobbling = true;
         
-        // Apply soft body impulse for jiggle effect (subtle!)
-        const jiggleForce = 0.15 * velocityScale; // Force for vertex deformation
+        // Apply soft body impulse for jiggle effect (subtle and slow!)
+        const jiggleForce = 0.12 * velocityScale; // Force for vertex deformation
         peachState.softBodies.forEach(softBody => {
             softBody.applyImpulse(intersectPoint, direction.clone(), jiggleForce);
         });

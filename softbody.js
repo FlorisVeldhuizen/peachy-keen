@@ -20,16 +20,23 @@ export class SoftBodyPhysics {
         // This prevents tearing while preserving UVs and other attributes
         this.vertexGroups = []; // Maps each vertex to its group of duplicates
         
-        // Physics parameters - tuned for subtle peachy jiggle!
-        this.stiffness = 0.25;      // Spring stiffness (higher = less jiggly)
-        this.damping = 0.88;        // Velocity damping (higher = less bouncy)
-        this.mass = 1.0;            // Vertex mass
-        this.propagation = 0.25;    // Force propagation to neighbors
-        this.maxDisplacement = 0.15; // Maximum distance a vertex can move from original
+        // Physics parameters - tuned for subtle, slow peachy jiggle!
+        this.stiffness = 0.3;       // Spring stiffness (higher = less jiggly)
+        this.damping = 0.92;        // Velocity damping (higher = less bouncy)
+        this.mass = 2.0;            // Vertex mass (higher = slower response)
+        this.propagation = 0.2;     // Force propagation to neighbors
+        this.maxDisplacement = 0.12; // Maximum distance a vertex can move from original
+        this.timeScale = 0.7;       // Global time scale for physics (lower = slower)
         
         this.initialized = false;
         this.isActive = false;      // Only compute when needed
         this.activityTimer = 0;
+        this.frameCount = 0;        // For reducing normal recalculation frequency
+        
+        // Reusable vectors to avoid garbage collection
+        this.tempVec1 = new THREE.Vector3();
+        this.tempVec2 = new THREE.Vector3();
+        this.tempVec3 = new THREE.Vector3();
         
         this.init();
     }
@@ -61,6 +68,7 @@ export class SoftBodyPhysics {
         // Group vertices that share the same position (within tolerance)
         const tolerance = 0.0001;
         const positions = this.geometry.attributes.position;
+        const posArray = positions.array;
         const positionMap = new Map();
         
         // Initialize - each vertex starts in its own group
@@ -68,11 +76,12 @@ export class SoftBodyPhysics {
             this.vertexGroups[i] = [i];
         }
         
-        // Find vertices at the same position
+        // Find vertices at the same position (use direct array access)
         for (let i = 0; i < positions.count; i++) {
-            const x = positions.getX(i);
-            const y = positions.getY(i);
-            const z = positions.getZ(i);
+            const i3 = i * 3;
+            const x = posArray[i3];
+            const y = posArray[i3 + 1];
+            const z = posArray[i3 + 2];
             
             // Create position key
             const key = 
@@ -93,9 +102,8 @@ export class SoftBodyPhysics {
             if (group.length > 1) {
                 groupCount++;
                 // All vertices in this group reference the same array
-                const sharedGroup = group;
                 for (const vertexIndex of group) {
-                    this.vertexGroups[vertexIndex] = sharedGroup;
+                    this.vertexGroups[vertexIndex] = group;
                 }
             }
         }
@@ -135,28 +143,29 @@ export class SoftBodyPhysics {
     buildProximityNeighbors() {
         // Fallback: use proximity-based neighbors
         const positions = this.geometry.attributes.position;
+        const posArray = positions.array;
         const threshold = 0.3; // Distance threshold for neighbors
+        const thresholdSq = threshold * threshold; // Use squared distance (faster)
         
         for (let i = 0; i < positions.count; i++) {
             const neighbors = [];
-            const pi = new THREE.Vector3(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
+            const i3 = i * 3;
+            const ix = posArray[i3];
+            const iy = posArray[i3 + 1];
+            const iz = posArray[i3 + 2];
             
             // Only check a subset to avoid O(n²) complexity
             const step = Math.max(1, Math.floor(positions.count / 100));
             for (let j = 0; j < positions.count; j += step) {
                 if (i === j) continue;
                 
-                const pj = new THREE.Vector3(
-                    positions.getX(j),
-                    positions.getY(j),
-                    positions.getZ(j)
-                );
+                const j3 = j * 3;
+                const dx = posArray[j3] - ix;
+                const dy = posArray[j3 + 1] - iy;
+                const dz = posArray[j3 + 2] - iz;
+                const distSq = dx * dx + dy * dy + dz * dz;
                 
-                if (pi.distanceTo(pj) < threshold) {
+                if (distSq < thresholdSq) {
                     neighbors.push(j);
                 }
             }
@@ -183,40 +192,46 @@ export class SoftBodyPhysics {
         
         this.isActive = true;
         this.activityTimer = 2.5; // Stay active for 2.5 seconds
+        this.frameCount = 0; // Reset frame count
         
-        // Transform world space to local space
-        const localPoint = worldPoint.clone();
-        this.mesh.worldToLocal(localPoint);
+        // Transform world space to local space (reuse temp vectors)
+        this.tempVec1.copy(worldPoint);
+        this.mesh.worldToLocal(this.tempVec1);
         
-        const localDirection = worldDirection.clone()
+        this.tempVec2.copy(worldDirection)
             .transformDirection(this.mesh.matrixWorld.clone().invert());
         
         const positions = this.geometry.attributes.position;
+        const posArray = positions.array;
         const impactRadius = 0.8; // Radius of impact effect (smaller = more localized)
+        const impactRadiusSq = impactRadius * impactRadius; // Compare squared distances (faster)
         
         // Apply force to vertices near the impact point
         for (let i = 0; i < positions.count; i++) {
-            const vertex = new THREE.Vector3(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
+            const i3 = i * 3;
             
-            const distance = vertex.distanceTo(localPoint);
+            // Calculate distance squared (avoid sqrt for performance)
+            const dx = posArray[i3] - this.tempVec1.x;
+            const dy = posArray[i3 + 1] - this.tempVec1.y;
+            const dz = posArray[i3 + 2] - this.tempVec1.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
             
-            if (distance < impactRadius) {
+            if (distSq < impactRadiusSq) {
+                const distance = Math.sqrt(distSq);
+                
                 // Falloff based on distance (closer = stronger)
                 const falloff = 1.0 - (distance / impactRadius);
                 const strength = force * falloff * falloff * falloff; // Cubic falloff for even softer impact
                 
                 // Add velocity in the impact direction
-                const impulse = localDirection.clone().multiplyScalar(strength);
-                this.vertexVelocities[i].add(impulse);
+                this.tempVec3.copy(this.tempVec2).multiplyScalar(strength);
+                this.vertexVelocities[i].add(this.tempVec3);
                 
                 // Clamp velocity to prevent explosion
                 const maxVelocity = 0.5;
-                if (this.vertexVelocities[i].length() > maxVelocity) {
-                    this.vertexVelocities[i].normalize().multiplyScalar(maxVelocity);
+                const velLength = this.vertexVelocities[i].length();
+                if (velLength > maxVelocity) {
+                    this.vertexVelocities[i].multiplyScalar(maxVelocity / velLength);
                 }
             }
         }
@@ -233,7 +248,9 @@ export class SoftBodyPhysics {
             return;
         }
         
+        this.frameCount++;
         const positions = this.geometry.attributes.position;
+        const posArray = positions.array; // Direct array access is faster
         
         // Reset forces
         for (let i = 0; i < this.vertexForces.length; i++) {
@@ -241,44 +258,37 @@ export class SoftBodyPhysics {
         }
         
         // Calculate spring forces (restore to original position)
+        // Reuse temp vectors to avoid creating new objects
         for (let i = 0; i < positions.count; i++) {
-            const current = new THREE.Vector3(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
+            const i3 = i * 3;
+            this.tempVec1.set(posArray[i3], posArray[i3 + 1], posArray[i3 + 2]);
             
             const original = this.originalPositions[i];
             
             // Spring force: F = -k * displacement
-            const displacement = current.clone().sub(original);
-            const springForce = displacement.multiplyScalar(-this.stiffness);
+            this.tempVec2.copy(this.tempVec1).sub(original).multiplyScalar(-this.stiffness);
             
-            this.vertexForces[i].add(springForce);
+            this.vertexForces[i].add(this.tempVec2);
         }
         
         // Propagate forces to neighbors (creates wave effect)
-        for (let i = 0; i < positions.count; i++) {
-            if (!this.neighbors.has(i)) continue;
-            
-            const neighbors = this.neighbors.get(i);
-            const current = new THREE.Vector3(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
-            
-            for (const neighborIndex of neighbors) {
-                const neighbor = new THREE.Vector3(
-                    positions.getX(neighborIndex),
-                    positions.getY(neighborIndex),
-                    positions.getZ(neighborIndex)
-                );
+        // Only do this every other frame for performance
+        if (this.frameCount % 2 === 0) {
+            for (let i = 0; i < positions.count; i++) {
+                if (!this.neighbors.has(i)) continue;
                 
-                // Force to align with neighbors (creates smooth waves)
-                const diff = neighbor.clone().sub(current);
-                const propagationForce = diff.multiplyScalar(this.propagation * 0.1);
-                this.vertexForces[i].add(propagationForce);
+                const neighbors = this.neighbors.get(i);
+                const i3 = i * 3;
+                this.tempVec1.set(posArray[i3], posArray[i3 + 1], posArray[i3 + 2]);
+                
+                for (const neighborIndex of neighbors) {
+                    const ni3 = neighborIndex * 3;
+                    this.tempVec2.set(posArray[ni3], posArray[ni3 + 1], posArray[ni3 + 2]);
+                    
+                    // Force to align with neighbors (creates smooth waves)
+                    this.tempVec3.copy(this.tempVec2).sub(this.tempVec1).multiplyScalar(this.propagation * 0.1);
+                    this.vertexForces[i].add(this.tempVec3);
+                }
             }
         }
         
@@ -308,81 +318,89 @@ export class SoftBodyPhysics {
                 avgForce.divideScalar(group.length);
                 
                 // Apply force: a = F / m
-                const acceleration = avgForce.divideScalar(this.mass);
+                avgForce.divideScalar(this.mass);
                 
                 // Update velocity for the group (use representative's velocity)
-                this.vertexVelocities[representative].add(acceleration.multiplyScalar(delta * 60));
+                this.tempVec1.copy(avgForce).multiplyScalar(delta * 60 * this.timeScale);
+                this.vertexVelocities[representative].add(this.tempVec1);
                 
                 // Apply damping
                 this.vertexVelocities[representative].multiplyScalar(this.damping);
                 
                 // Clamp velocity
                 const maxVelocity = 0.3;
-                if (this.vertexVelocities[representative].length() > maxVelocity) {
-                    this.vertexVelocities[representative].normalize().multiplyScalar(maxVelocity);
+                const velLength = this.vertexVelocities[representative].length();
+                if (velLength > maxVelocity) {
+                    this.vertexVelocities[representative].multiplyScalar(maxVelocity / velLength);
                 }
                 
-                // Calculate new position for the group
-                const currentPos = new THREE.Vector3(
-                    positions.getX(representative),
-                    positions.getY(representative),
-                    positions.getZ(representative)
-                );
-                const newPos = currentPos.add(this.vertexVelocities[representative].clone().multiplyScalar(delta * 60));
+                // Calculate new position for the group (reuse temp vectors)
+                const rep3 = representative * 3;
+                this.tempVec1.set(posArray[rep3], posArray[rep3 + 1], posArray[rep3 + 2]);
+                this.tempVec2.copy(this.vertexVelocities[representative]).multiplyScalar(delta * 60 * this.timeScale);
+                this.tempVec1.add(this.tempVec2);
                 
                 // Constrain position
-                const displacement = newPos.clone().sub(this.originalPositions[representative]);
-                const displacementLength = displacement.length();
+                this.tempVec3.copy(this.tempVec1).sub(this.originalPositions[representative]);
+                const displacementLength = this.tempVec3.length();
                 
                 if (displacementLength > this.maxDisplacement) {
-                    displacement.normalize().multiplyScalar(this.maxDisplacement);
-                    newPos.copy(this.originalPositions[representative]).add(displacement);
+                    this.tempVec3.multiplyScalar(this.maxDisplacement / displacementLength);
+                    this.tempVec1.copy(this.originalPositions[representative]).add(this.tempVec3);
                     this.vertexVelocities[representative].multiplyScalar(0.5);
                 }
                 
                 // Apply the same position to ALL vertices in the group
                 for (const idx of group) {
                     const offset = this.originalPositions[idx].clone().sub(this.originalPositions[representative]);
-                    const finalPos = newPos.clone().add(offset);
-                    positions.setXYZ(idx, finalPos.x, finalPos.y, finalPos.z);
+                    const finalPos = this.tempVec1.clone().add(offset);
+                    const idx3 = idx * 3;
+                    posArray[idx3] = finalPos.x;
+                    posArray[idx3 + 1] = finalPos.y;
+                    posArray[idx3 + 2] = finalPos.z;
                     // Sync velocities too
                     this.vertexVelocities[idx].copy(this.vertexVelocities[representative]);
                 }
             } else {
-                // Single vertex, process normally
-                const acceleration = this.vertexForces[i].clone().divideScalar(this.mass);
-                
-                this.vertexVelocities[i].add(acceleration.multiplyScalar(delta * 60));
+                // Single vertex, process normally (reuse temp vectors)
+                this.tempVec1.copy(this.vertexForces[i]).divideScalar(this.mass).multiplyScalar(delta * 60 * this.timeScale);
+                this.vertexVelocities[i].add(this.tempVec1);
                 this.vertexVelocities[i].multiplyScalar(this.damping);
                 
-                const maxVelocity = 0.3;
-                if (this.vertexVelocities[i].length() > maxVelocity) {
-                    this.vertexVelocities[i].normalize().multiplyScalar(maxVelocity);
+                const maxVelocity = 0.25; // Slightly lower max velocity
+                const velLength = this.vertexVelocities[i].length();
+                if (velLength > maxVelocity) {
+                    this.vertexVelocities[i].multiplyScalar(maxVelocity / velLength);
                 }
                 
-                const currentPos = new THREE.Vector3(
-                    positions.getX(i),
-                    positions.getY(i),
-                    positions.getZ(i)
-                );
-                const newPos = currentPos.add(this.vertexVelocities[i].clone().multiplyScalar(delta * 60));
+                const i3 = i * 3;
+                this.tempVec1.set(posArray[i3], posArray[i3 + 1], posArray[i3 + 2]);
+                this.tempVec2.copy(this.vertexVelocities[i]).multiplyScalar(delta * 60 * this.timeScale);
+                this.tempVec1.add(this.tempVec2);
                 
-                const displacement = newPos.clone().sub(this.originalPositions[i]);
-                const displacementLength = displacement.length();
+                this.tempVec3.copy(this.tempVec1).sub(this.originalPositions[i]);
+                const displacementLength = this.tempVec3.length();
                 
                 if (displacementLength > this.maxDisplacement) {
-                    displacement.normalize().multiplyScalar(this.maxDisplacement);
-                    newPos.copy(this.originalPositions[i]).add(displacement);
+                    this.tempVec3.multiplyScalar(this.maxDisplacement / displacementLength);
+                    this.tempVec1.copy(this.originalPositions[i]).add(this.tempVec3);
                     this.vertexVelocities[i].multiplyScalar(0.5);
                 }
                 
-                positions.setXYZ(i, newPos.x, newPos.y, newPos.z);
+                posArray[i3] = this.tempVec1.x;
+                posArray[i3 + 1] = this.tempVec1.y;
+                posArray[i3 + 2] = this.tempVec1.z;
             }
         }
         
         // Mark geometry as needing update
         positions.needsUpdate = true;
-        this.geometry.computeVertexNormals(); // Recalculate normals for proper lighting
+        
+        // Only recalculate normals every 3 frames (huge performance boost!)
+        // The visual difference is negligible but performance is much better
+        if (this.frameCount % 3 === 0) {
+            this.geometry.computeVertexNormals();
+        }
     }
     
     resetToOriginal() {
