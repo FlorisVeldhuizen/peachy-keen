@@ -106,6 +106,19 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
                 oilButton.classList.remove('oiled');
             }
         });
+        
+        // Change cursor emoji when hovering over button
+        oilButton.addEventListener('mouseenter', () => {
+            if (handCursor) {
+                handCursor.textContent = '👆';
+            }
+        });
+        
+        oilButton.addEventListener('mouseleave', () => {
+            if (handCursor) {
+                handCursor.textContent = '🤚';
+            }
+        });
     }
 }
 
