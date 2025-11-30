@@ -31,7 +31,7 @@ loadPeachModel(peachGroup, (meshes) => {
 });
 
 // Initialize interaction system
-initInteraction(peachGroup, camera);
+initInteraction(peachGroup, camera, scene);
 
 // Setup window resize handler
 setupResizeHandler(camera, renderer, backgroundMaterial);
