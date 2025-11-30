@@ -127,10 +127,11 @@ export function createBackgroundMaterial() {
                 float liquid = reactionDiffusion(uv, time);
                 
                 // Funky color cycling - multiple hue layers (subtle)
-                float baseHue = mod(time * 0.022, 1.0);
+                // Use smooth sinusoidal cycling instead of mod for seamless transitions
+                float baseHue = sin(time * 0.022) * 0.5 + 0.5;
                 float hueWobble = sin(time * 0.6 + plasma * 6.28) * 0.05;
-                float hue1 = baseHue + plasma * 0.25 + liquid * 0.1 + hueWobble;
-                float hue2 = baseHue + plasma * 0.35 + liquid * 0.12 - hueWobble;
+                float hue1 = mod(baseHue + plasma * 0.25 + liquid * 0.1 + hueWobble, 1.0);
+                float hue2 = mod(baseHue + plasma * 0.35 + liquid * 0.12 - hueWobble, 1.0);
                 
                 // Pulsating saturation for extra funkiness (subtle)
                 float satPulse = sin(time * 0.7) * 0.05 + 0.95;
