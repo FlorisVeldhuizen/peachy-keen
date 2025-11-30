@@ -262,18 +262,14 @@ export function toggleOilEffect() {
                     originalMaterialProperties.set(mesh, {
                         roughness: mesh.material.roughness,
                         metalness: mesh.material.metalness,
-                        emissiveIntensity: mesh.material.emissiveIntensity,
-                        transparent: mesh.material.transparent,
-                        opacity: mesh.material.opacity
+                        emissiveIntensity: mesh.material.emissiveIntensity
                     });
                 }
                 
-                // Apply oil effect: very shiny, glossy, slightly transparent
+                // Apply oil effect: very shiny, glossy, bright
                 mesh.material.roughness = 0.1; // Very smooth and shiny
-                mesh.material.metalness = 0.3; // Some metallic reflection for wet look
-                mesh.material.emissiveIntensity = 0.2; // Slight glow
-                mesh.material.transparent = true;
-                mesh.material.opacity = 0.95; // Slightly transparent for that massage oil look
+                mesh.material.metalness = 0.1; // Minimal metallic reflection to stay bright
+                mesh.material.emissiveIntensity = 0.5; // Strong glow for brightness
                 mesh.material.envMapIntensity = 2.0; // Enhance reflections if env map exists
             } else {
                 // Restore original properties
@@ -282,8 +278,6 @@ export function toggleOilEffect() {
                     mesh.material.roughness = original.roughness;
                     mesh.material.metalness = original.metalness;
                     mesh.material.emissiveIntensity = original.emissiveIntensity;
-                    mesh.material.transparent = original.transparent;
-                    mesh.material.opacity = original.opacity;
                     mesh.material.envMapIntensity = 1.0;
                 }
             }
