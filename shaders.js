@@ -100,41 +100,57 @@ export function createBackgroundMaterial() {
                 float distFromCenter = length(uv - center);
                 
                 // Create smooth vignette effect (0 at center, 1 at edges)
-                float vignette = smoothstep(0.0, 0.8, distFromCenter);
+                float vignette = smoothstep(0.0, 0.9, distFromCenter);
                 
-                // Create liquid simulation
+                // Flowing plasma-like effect (Balatro style)
+                vec2 flow1 = uv + vec2(sin(time * 0.3 + uv.y * 3.0), cos(time * 0.2 + uv.x * 3.0)) * 0.2;
+                vec2 flow2 = uv + vec2(cos(time * 0.25 + uv.y * 4.0), sin(time * 0.35 + uv.x * 4.0)) * 0.15;
+                vec2 flow3 = uv + vec2(sin(time * 0.4 - uv.x * 2.0), cos(time * 0.3 - uv.y * 2.0)) * 0.25;
+                
+                // Multiple layers of flowing noise
+                float n1 = noise(flow1 * 4.0);
+                float n2 = noise(flow2 * 6.0);
+                float n3 = noise(flow3 * 3.0);
+                
+                // Combine noise layers for plasma effect
+                float plasma = (n1 * 0.5 + n2 * 0.3 + n3 * 0.2);
+                plasma = pow(plasma, 1.5); // Enhance contrast
+                
+                // Create liquid simulation for additional detail
                 float liquid = reactionDiffusion(uv, time);
                 
-                // Slowly rotating hue (completes full cycle every ~60 seconds)
-                float baseHue = mod(time * 0.017, 1.0);
+                // Slowly rotating hue with plasma influence
+                float baseHue = mod(time * 0.02, 1.0);
+                float hue = baseHue + plasma * 0.25 + liquid * 0.1;
                 
-                // Shift hue slightly toward purple/blue at edges for depth
-                float hue = baseHue + vignette * 0.15;
+                // Higher saturation for vibey feel
+                float saturation = mix(0.6, 0.3, vignette);
+                saturation += plasma * 0.2;
                 
-                // Reduce saturation at edges (more gray/desaturated)
-                float saturation = mix(0.35, 0.08, vignette);
+                // Brighter overall with plasma influence
+                float centerBoost = 0.20;
+                float edgeDarkness = 0.08;
+                float lightness = mix(centerBoost, edgeDarkness, vignette);
+                lightness += plasma * 0.15 + liquid * 0.05;
                 
-                // Significantly darker at edges, brighter at center
-                float centerBoost = 0.12; // Extra brightness at center
-                float edgeDarkness = 0.05; // Very dark at edges
-                float lightness1 = mix(centerBoost, edgeDarkness, vignette) + liquid * 0.02;
-                float lightness2 = mix(centerBoost + 0.08, edgeDarkness + 0.03, vignette) + liquid * 0.04;
+                // Create main color
+                vec3 color1 = hsl2rgb(vec3(hue, saturation, lightness));
+                vec3 color2 = hsl2rgb(vec3(hue + 0.1, saturation * 0.9, lightness * 0.8));
                 
-                // Create two colors with adjusted hue, saturation, and lightness
-                vec3 color1 = hsl2rgb(vec3(hue, saturation, lightness1));
-                vec3 color2 = hsl2rgb(vec3(hue, saturation, lightness2));
+                // Mix colors based on plasma
+                vec3 finalColor = mix(color1, color2, plasma);
                 
-                // Mix colors based on liquid pattern
-                vec3 finalColor = mix(color1, color2, liquid);
+                // Add complementary color accents
+                float accentHue = mod(hue + 0.5, 1.0);
+                vec3 accentColor = hsl2rgb(vec3(accentHue, saturation * 0.8, lightness * 0.6));
+                finalColor = mix(finalColor, accentColor, liquid * 0.15);
                 
-                // Add subtle iridescence, stronger at center
-                float iridescent = sin(liquid * 3.14159 + time * 0.3) * 0.02 * (1.0 - vignette * 0.7);
-                vec3 iridHsl = vec3(mod(baseHue + 0.5, 1.0), saturation * 1.5, 0.3);
-                vec3 iridColor = hsl2rgb(iridHsl);
-                finalColor += iridColor * iridescent;
+                // Smooth glow at center
+                float glow = smoothstep(0.5, 0.0, distFromCenter) * 0.15;
+                finalColor += glow;
                 
-                // Additional vignette darkening for strong focus
-                finalColor *= (1.0 - vignette * 0.6);
+                // Vignette for focus
+                finalColor *= (1.0 - vignette * 0.5);
                 
                 gl_FragColor = vec4(finalColor, 1.0);
             }
