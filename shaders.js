@@ -102,54 +102,83 @@ export function createBackgroundMaterial() {
                 // Create smooth vignette effect (0 at center, 1 at edges)
                 float vignette = smoothstep(0.0, 0.9, distFromCenter);
                 
-                // Flowing plasma-like effect (Balatro style)
-                vec2 flow1 = uv + vec2(sin(time * 0.3 + uv.y * 3.0), cos(time * 0.2 + uv.x * 3.0)) * 0.2;
-                vec2 flow2 = uv + vec2(cos(time * 0.25 + uv.y * 4.0), sin(time * 0.35 + uv.x * 4.0)) * 0.15;
-                vec2 flow3 = uv + vec2(sin(time * 0.4 - uv.x * 2.0), cos(time * 0.3 - uv.y * 2.0)) * 0.25;
+                // FUNKY flowing plasma with chromatic warping (subtle)
+                vec2 warp = vec2(
+                    sin(time * 0.4 + uv.y * 4.0 + cos(time * 0.25) * 1.5),
+                    cos(time * 0.35 + uv.x * 4.0 + sin(time * 0.2) * 1.5)
+                ) * 0.18;
                 
-                // Multiple layers of flowing noise
+                vec2 flow1 = uv + warp + vec2(sin(time * 0.3 + uv.y * 3.0), cos(time * 0.2 + uv.x * 3.0)) * 0.15;
+                vec2 flow2 = uv - warp * 0.5 + vec2(cos(time * 0.25 + uv.y * 4.0), sin(time * 0.35 + uv.x * 4.0)) * 0.12;
+                vec2 flow3 = uv + vec2(sin(time * 0.4 - uv.x * 2.0), cos(time * 0.3 - uv.y * 2.0)) * 0.18;
+                vec2 flow4 = uv + vec2(cos(time * 0.15 + uv.y * 6.0), sin(time * 0.18 + uv.x * 6.0)) * 0.1;
+                
+                // Multiple layers of flowing noise with different scales
                 float n1 = noise(flow1 * 4.0);
-                float n2 = noise(flow2 * 6.0);
+                float n2 = noise(flow2 * 7.0);
                 float n3 = noise(flow3 * 3.0);
+                float n4 = noise(flow4 * 10.0);
                 
-                // Combine noise layers for plasma effect
-                float plasma = (n1 * 0.5 + n2 * 0.3 + n3 * 0.2);
-                plasma = pow(plasma, 1.5); // Enhance contrast
+                // Combine noise layers for ultra plasma effect
+                float plasma = (n1 * 0.4 + n2 * 0.3 + n3 * 0.2 + n4 * 0.1);
+                plasma = pow(plasma, 1.3); // Enhance contrast but keep it smooth
                 
-                // Create liquid simulation for additional detail
+                // Create liquid simulation for additional trippy detail
                 float liquid = reactionDiffusion(uv, time);
                 
-                // Slowly rotating hue with plasma influence
-                float baseHue = mod(time * 0.02, 1.0);
-                float hue = baseHue + plasma * 0.25 + liquid * 0.1;
+                // Funky color cycling - multiple hue layers (subtle)
+                float baseHue = mod(time * 0.022, 1.0);
+                float hueWobble = sin(time * 0.6 + plasma * 6.28) * 0.05;
+                float hue1 = baseHue + plasma * 0.25 + liquid * 0.1 + hueWobble;
+                float hue2 = baseHue + plasma * 0.35 + liquid * 0.12 - hueWobble;
                 
-                // Higher saturation for vibey feel
-                float saturation = mix(0.6, 0.3, vignette);
-                saturation += plasma * 0.2;
+                // Pulsating saturation for extra funkiness (subtle)
+                float satPulse = sin(time * 0.7) * 0.05 + 0.95;
+                float saturation1 = mix(0.6, 0.35, vignette) * satPulse;
+                float saturation2 = mix(0.55, 0.3, vignette) * satPulse;
+                saturation1 += plasma * 0.15;
+                saturation2 += n4 * 0.12;
                 
-                // Brighter overall with plasma influence
+                // Dynamic brightness with pulsing (subtle)
+                float brightPulse = sin(time * 0.5 + plasma * 3.14) * 0.03 + 1.0;
                 float centerBoost = 0.20;
-                float edgeDarkness = 0.08;
-                float lightness = mix(centerBoost, edgeDarkness, vignette);
-                lightness += plasma * 0.15 + liquid * 0.05;
+                float edgeDarkness = 0.09;
+                float lightness1 = mix(centerBoost, edgeDarkness, vignette) * brightPulse;
+                lightness1 += plasma * 0.12 + liquid * 0.05;
+                float lightness2 = mix(centerBoost + 0.04, edgeDarkness + 0.02, vignette) * brightPulse;
+                lightness2 += n2 * 0.10 + liquid * 0.04;
                 
-                // Create main color
-                vec3 color1 = hsl2rgb(vec3(hue, saturation, lightness));
-                vec3 color2 = hsl2rgb(vec3(hue + 0.1, saturation * 0.9, lightness * 0.8));
+                // Create multiple color layers
+                vec3 color1 = hsl2rgb(vec3(hue1, saturation1, lightness1));
+                vec3 color2 = hsl2rgb(vec3(hue2, saturation2, lightness2));
                 
-                // Mix colors based on plasma
-                vec3 finalColor = mix(color1, color2, plasma);
+                // Mix colors based on plasma with smooth blending
+                vec3 finalColor = mix(color1, color2, plasma * 0.7 + 0.3);
                 
-                // Add complementary color accents
-                float accentHue = mod(hue + 0.5, 1.0);
-                vec3 accentColor = hsl2rgb(vec3(accentHue, saturation * 0.8, lightness * 0.6));
-                finalColor = mix(finalColor, accentColor, liquid * 0.15);
+                // Add subtle complementary color splashes
+                float accentHue1 = mod(hue1 + 0.5, 1.0);
+                float accentHue2 = mod(hue2 + 0.33, 1.0);
+                vec3 accentColor1 = hsl2rgb(vec3(accentHue1, saturation1 * 0.85, lightness1 * 0.75));
+                vec3 accentColor2 = hsl2rgb(vec3(accentHue2, saturation2 * 0.8, lightness2 * 0.7));
                 
-                // Smooth glow at center
-                float glow = smoothstep(0.5, 0.0, distFromCenter) * 0.15;
+                finalColor = mix(finalColor, accentColor1, liquid * 0.12);
+                finalColor = mix(finalColor, accentColor2, n4 * 0.08);
+                
+                // Chromatic aberration-style color split (subtle)
+                float chromaticShift = sin(time * 0.35 + distFromCenter * 3.5) * 0.012;
+                vec3 chromaticR = hsl2rgb(vec3(hue1 + chromaticShift, saturation1, lightness1));
+                vec3 chromaticB = hsl2rgb(vec3(hue2 - chromaticShift, saturation2, lightness2));
+                finalColor = vec3(
+                    mix(finalColor.r, chromaticR.r, 0.08),
+                    finalColor.g,
+                    mix(finalColor.b, chromaticB.b, 0.08)
+                );
+                
+                // Pulsating glow at center (subtle)
+                float glow = smoothstep(0.6, 0.0, distFromCenter) * (0.12 + sin(time * 1.0) * 0.04);
                 finalColor += glow;
                 
-                // Vignette for focus
+                // Softer vignette to let the funk shine through
                 finalColor *= (1.0 - vignette * 0.5);
                 
                 gl_FragColor = vec4(finalColor, 1.0);
