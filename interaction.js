@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { playSmackSound, playExplosionSound } from './audio.js';
 import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
+import { toggleOilEffect } from './peach.js';
 
 // Constants
 const PHYSICS_DAMPING = 0.95;
@@ -91,6 +92,21 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
+    
+    // Oil button event
+    const oilButton = document.getElementById('oil-button');
+    if (oilButton) {
+        oilButton.addEventListener('click', () => {
+            const isOiled = toggleOilEffect();
+            if (isOiled) {
+                oilButton.textContent = '💧 Oiled Up!';
+                oilButton.classList.add('oiled');
+            } else {
+                oilButton.textContent = '💧 Oil Up';
+                oilButton.classList.remove('oiled');
+            }
+        });
+    }
 }
 
 /**

@@ -142,67 +142,54 @@
             }
         }
         
-        /* Sound Enable Overlay */
-        #sound-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
+        /* Oil Button Styles */
+        #oil-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: opacity 0.3s ease;
-        }
-        
-        #sound-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        
-        #sound-overlay-content {
-            background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 15px;
-            padding: 25px 45px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            z-index: 10;
+            pointer-events: auto;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
         }
         
+        #oil-button:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+        
+        #oil-button:active {
+            transform: translateY(0px);
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        #oil-button.oiled {
+            background: rgba(100, 200, 255, 0.25);
+            border-color: rgba(100, 200, 255, 0.5);
+        }
+        
+        /* Responsive button for mobile */
         @media (max-width: 600px) {
-            #sound-overlay-content {
-                padding: 20px 35px;
-            }
-        }
-        
-        #sound-overlay-content p {
-            color: rgba(255, 255, 255, 0.85);
-            font-size: 20px;
-            margin: 0;
-            text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
-            font-weight: 300;
-            letter-spacing: 0.5px;
-        }
-        
-        @media (max-width: 600px) {
-            #sound-overlay-content p {
-                font-size: 18px;
+            #oil-button {
+                top: 10px;
+                right: 10px;
+                padding: 8px 16px;
+                font-size: 12px;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Sound Enable Overlay -->
-    <div id="sound-overlay">
-        <div id="sound-overlay-content">
-            <p>Click anywhere to start</p>
-        </div>
-    </div>
-    
     <div class="instructions">
         🍑 Swipe over the peach to smack it! 🍑
     </div>
@@ -212,7 +199,10 @@
         <div id="rage-meter-label">🍑 PEACH-O-METER 🍑</div>
     </div>
     
-    <div id="hand-cursor">✋</div>
+    <div id="hand-cursor">🤚</div>
+    
+    <button id="oil-button">💧 Oil Up</button>
+    
     <script type="module" src="/main.js"></script>
 </body>
 </html>

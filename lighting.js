@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Setup all scene lighting with angled, dramatic three-point lighting
+ * Setup atmospheric lighting with influencer-style ring light
  * @param {THREE.Scene} scene - The scene to add lights to
  */
 export function setupLighting(scene) {
@@ -10,47 +10,51 @@ export function setupLighting(scene) {
         return;
     }
     
-    // Lighting - Angled for form definition
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Brighter ambient for visibility
+    // Soft ambient base
+    const ambientLight = new THREE.AmbientLight(0xffeedd, 0.4);
     scene.add(ambientLight);
 
-    // Key light at 45 degrees from upper left - classic three-point lighting angle
-    const keyLight = new THREE.DirectionalLight(0xffffff, 3.5);
-    keyLight.position.set(-5, 6, 5); // Angled from side for better form definition
-    keyLight.castShadow = true;
+    // Create the physical ring light (like influencer/beauty ring lights)
+    const ringLightGeometry = new THREE.TorusGeometry(3.5, 0.15, 16, 100);
+    const ringLightMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffd9a8,
+        emissive: 0xffd9a8,
+        emissiveIntensity: 2,
+        toneMapped: false // Make it super bright
+    });
+    const ringLightMesh = new THREE.Mesh(ringLightGeometry, ringLightMaterial);
+    
+    // Position it in front of the peach, facing it
+    ringLightMesh.position.set(0, 0, 6);
+    ringLightMesh.rotation.x = 0; // Face the camera/peach
+    scene.add(ringLightMesh);
+
+    // Add point lights around the ring to actually illuminate the scene
+    const numLights = 24;
+    const ringRadius = 3.5;
+    for (let i = 0; i < numLights; i++) {
+        const angle = (i / numLights) * Math.PI * 2;
+        const x = Math.cos(angle) * ringRadius;
+        const y = Math.sin(angle) * ringRadius;
+        
+        const light = new THREE.PointLight(0xffd9a8, 1.5, 100);
+        light.position.set(x, y, 6);
+        scene.add(light);
+    }
+
+    // Soft key light from above for gentle definition
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    keyLight.position.set(0, 5, 8);
     scene.add(keyLight);
 
-    // Fill light from opposite side at lower angle
-    const fillLight = new THREE.DirectionalLight(0xffd9b3, 0.5);
-    fillLight.position.set(4, 1, 3); // Lower and from the right
-    scene.add(fillLight);
-
-    // Strong rim light from behind-top to separate the peach from background
-    const rimLight = new THREE.PointLight(0xffffff, 4.5, 100);
-    rimLight.position.set(1, 3, -5); // Higher and more angled
+    // Rim light from behind to enhance contours
+    const rimLight = new THREE.PointLight(0xffe4d6, 2.0, 100);
+    rimLight.position.set(0, 1, -6);
     scene.add(rimLight);
 
-    // Side accent lights at grazing angles to reveal curves and crease
-    const leftCreaseLight = new THREE.PointLight(0xffddaa, 2.0, 100);
-    leftCreaseLight.position.set(-4, 0.5, 3); // More from the side, slight height
-    scene.add(leftCreaseLight);
-
-    const rightCreaseLight = new THREE.PointLight(0xffddaa, 2.0, 100);
-    rightCreaseLight.position.set(4, 0.5, 3); // Mirror from right side
-    scene.add(rightCreaseLight);
-
-    // Bottom light to lift shadows slightly and show bottom curves
-    const bottomLight = new THREE.PointLight(0xffccaa, 0.8, 100);
-    bottomLight.position.set(0, -3, 2);
-    scene.add(bottomLight);
-
-    // Accent lights for the psychedelic effect
-    const pointLight1 = new THREE.PointLight(0xff69b4, 1.2, 100);
-    pointLight1.position.set(-5, -5, 5);
-    scene.add(pointLight1);
-
-    const pointLight2 = new THREE.PointLight(0x00ffff, 0.9, 100);
-    pointLight2.position.set(5, -3, 4);
-    scene.add(pointLight2);
+    // Subtle fill from below
+    const bottomFill = new THREE.PointLight(0xffd9c8, 0.6, 100);
+    bottomFill.position.set(0, -3, 4);
+    scene.add(bottomFill);
 }
 

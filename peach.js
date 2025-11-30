@@ -10,6 +10,11 @@ const NORMAL_MAP_HEIGHT_SCALE = 0.3;
 const TARGET_MODEL_HEIGHT = 3;
 const MODEL_ROTATION_DEGREES = 300;
 
+// Oil effect state
+let peachMeshes = [];
+let isOiled = false;
+const originalMaterialProperties = new Map();
+
 /**
  * Generate a procedural normal map for smooth peach skin texture
  * @returns {THREE.CanvasTexture} Generated normal map texture
@@ -226,6 +231,7 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             });
             
             peachGroup.add(model);
+            peachMeshes = meshes; // Store meshes for oil effect
             onMeshesLoaded(meshes);
         },
         undefined,
@@ -235,8 +241,65 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             const { meshes, leaf } = createProceduralPeach();
             peachGroup.add(meshes[0]);
             peachGroup.add(leaf);
+            peachMeshes = meshes; // Store meshes for oil effect
             onMeshesLoaded(meshes);
         }
     );
+}
+
+/**
+ * Toggle the oil effect on the peach
+ * @returns {boolean} Whether the peach is now oiled
+ */
+export function toggleOilEffect() {
+    isOiled = !isOiled;
+    
+    peachMeshes.forEach(mesh => {
+        if (mesh.material) {
+            if (isOiled) {
+                // Store original properties if not already stored
+                if (!originalMaterialProperties.has(mesh)) {
+                    originalMaterialProperties.set(mesh, {
+                        roughness: mesh.material.roughness,
+                        metalness: mesh.material.metalness,
+                        emissiveIntensity: mesh.material.emissiveIntensity,
+                        transparent: mesh.material.transparent,
+                        opacity: mesh.material.opacity
+                    });
+                }
+                
+                // Apply oil effect: very shiny, glossy, slightly transparent
+                mesh.material.roughness = 0.1; // Very smooth and shiny
+                mesh.material.metalness = 0.3; // Some metallic reflection for wet look
+                mesh.material.emissiveIntensity = 0.2; // Slight glow
+                mesh.material.transparent = true;
+                mesh.material.opacity = 0.95; // Slightly transparent for that massage oil look
+                mesh.material.envMapIntensity = 2.0; // Enhance reflections if env map exists
+            } else {
+                // Restore original properties
+                const original = originalMaterialProperties.get(mesh);
+                if (original) {
+                    mesh.material.roughness = original.roughness;
+                    mesh.material.metalness = original.metalness;
+                    mesh.material.emissiveIntensity = original.emissiveIntensity;
+                    mesh.material.transparent = original.transparent;
+                    mesh.material.opacity = original.opacity;
+                    mesh.material.envMapIntensity = 1.0;
+                }
+            }
+            
+            mesh.material.needsUpdate = true;
+        }
+    });
+    
+    return isOiled;
+}
+
+/**
+ * Check if the peach is currently oiled
+ * @returns {boolean} Whether the peach is oiled
+ */
+export function isOiledState() {
+    return isOiled;
 }
 
