@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { SphereGeometry, MeshStandardMaterial, Mesh, BoxGeometry, CanvasTexture, RepeatWrapping, Vector3, Vector2, Box3, Color } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Texture generation constants
@@ -86,9 +86,9 @@ function generatePeachNormalMap() {
     ctx.putImageData(imageData, 0, 0);
     
     // Create texture from canvas
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
     texture.needsUpdate = true;
     
     return texture;
@@ -101,7 +101,7 @@ function generatePeachNormalMap() {
 function createProceduralPeach() {
     
     // Peach body (sphere with deformations)
-    const peachGeometry = new THREE.SphereGeometry(1.5, 64, 64);
+    const peachGeometry = new SphereGeometry(1.5, 64, 64);
     const peachPositions = peachGeometry.attributes.position;
 
     // Add peach features: dimple at top and vertical seam creating two round halves
@@ -149,26 +149,26 @@ function createProceduralPeach() {
     peachGeometry.computeVertexNormals();
 
     const normalMap = generatePeachNormalMap();
-    const peachMaterial = new THREE.MeshStandardMaterial({
+    const peachMaterial = new MeshStandardMaterial({
         color: 0xffb347,
         roughness: 0.7,
         metalness: 0.0,
         emissive: 0xff8c42,
         emissiveIntensity: 0.1,
         normalMap: normalMap,
-        normalScale: new THREE.Vector2(0.5, 0.5) // Subtle effect
+        normalScale: new Vector2(0.5, 0.5) // Subtle effect
     });
 
-    const peachMesh = new THREE.Mesh(peachGeometry, peachMaterial);
+    const peachMesh = new Mesh(peachGeometry, peachMaterial);
 
     // Add a leaf on top
-    const leafGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.05);
-    const leafMaterial = new THREE.MeshStandardMaterial({
+    const leafGeometry = new BoxGeometry(0.15, 0.4, 0.05);
+    const leafMaterial = new MeshStandardMaterial({
         color: 0x2d5016,
         roughness: 0.7
     });
 
-    const leaf = new THREE.Mesh(leafGeometry, leafMaterial);
+    const leaf = new Mesh(leafGeometry, leafMaterial);
     leaf.position.y = 0.9;
     leaf.rotation.x = -0.3;
     
@@ -190,9 +190,9 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             const model = gltf.scene;
             
             // Get the bounding box to understand the model size
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
-            const center = box.getCenter(new THREE.Vector3());
+            const box = new Box3().setFromObject(model);
+            const size = box.getSize(new Vector3());
+            const center = box.getCenter(new Vector3());
             
             // Scale the model to target height
             const scaleFactor = TARGET_MODEL_HEIGHT / size.y;
@@ -222,9 +222,9 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
                     if (child.material) {
                         child.material.flatShading = false;
                         child.material.normalMap = normalMap;
-                        child.material.normalScale = new THREE.Vector2(0.5, 0.5); // Subtle effect
+                        child.material.normalScale = new Vector2(0.5, 0.5); // Subtle effect
                         // Add peachy pink tint (FFB3BA is a soft peachy pink color)
-                        child.material.color = new THREE.Color(0xFFB3BA);
+                        child.material.color = new Color(0xFFB3BA);
                         child.material.needsUpdate = true;
                     }
                 }

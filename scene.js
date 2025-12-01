@@ -1,13 +1,13 @@
-import * as THREE from 'three';
+import { Scene, PerspectiveCamera, WebGLRenderer, PCFSoftShadowMap, ACESFilmicToneMapping } from 'three';
 
 /**
  * Initialize the Three.js scene, camera, and renderer
  * @returns {Object} Object containing scene, camera, and renderer
  */
 export function initScene() {
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const scene = new Scene();
+    const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new WebGLRenderer({ antialias: true });
 
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -17,8 +17,8 @@ export function initScene() {
 
     // Enable shadows and tone mapping for dramatic contrast
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.5;
 
     return { scene, camera, renderer };

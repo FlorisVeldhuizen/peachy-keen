@@ -1,14 +1,14 @@
-import * as THREE from 'three';
+import { ShaderMaterial, Vector2 } from 'three';
 
 /**
  * Create the animated background shader material
  * @returns {THREE.ShaderMaterial} The background shader material
  */
 export function createBackgroundMaterial() {
-    return new THREE.ShaderMaterial({
+    return new ShaderMaterial({
         uniforms: {
             time: { value: 0 },
-            resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+            resolution: { value: new Vector2(window.innerWidth, window.innerHeight) }
         },
         vertexShader: `
             varying vec2 vUv;
@@ -22,17 +22,24 @@ export function createBackgroundMaterial() {
             uniform vec2 resolution;
             varying vec2 vUv;
             
-            // Noise function for organic patterns
+            // Constants for better performance
+            const vec2 HASH_MULT = vec2(123.34, 456.21);
+            const float HASH_DOT = 45.32;
+            const float PI = 3.14159265359;
+            const float TWO_PI = 6.28318530718;
+            
+            // Noise function for organic patterns (optimized)
             float hash(vec2 p) {
-                p = fract(p * vec2(123.34, 456.21));
-                p += dot(p, p + 45.32);
+                p = fract(p * HASH_MULT);
+                p += dot(p, p + HASH_DOT);
                 return fract(p.x * p.y);
             }
             
+            // Optimized noise with smoothstep
             float noise(vec2 p) {
                 vec2 i = floor(p);
                 vec2 f = fract(p);
-                f = f * f * (3.0 - 2.0 * f);
+                f = f * f * (3.0 - 2.0 * f); // Hermite interpolation
                 
                 float a = hash(i);
                 float b = hash(i + vec2(1.0, 0.0));
@@ -42,22 +49,19 @@ export function createBackgroundMaterial() {
                 return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
             }
             
-            // HSL to RGB conversion
+            // Optimized HSL to RGB conversion
             vec3 hsl2rgb(vec3 hsl) {
-                float h = hsl.x;
-                float s = hsl.y;
-                float l = hsl.z;
+                float c = (1.0 - abs(2.0 * hsl.z - 1.0)) * hsl.y;
+                float h6 = hsl.x * 6.0;
+                float x = c * (1.0 - abs(mod(h6, 2.0) - 1.0));
+                float m = hsl.z - c * 0.5;
                 
-                float c = (1.0 - abs(2.0 * l - 1.0)) * s;
-                float x = c * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
-                float m = l - c * 0.5;
-                
-                vec3 rgb;
-                if (h < 1.0/6.0) rgb = vec3(c, x, 0.0);
-                else if (h < 2.0/6.0) rgb = vec3(x, c, 0.0);
-                else if (h < 3.0/6.0) rgb = vec3(0.0, c, x);
-                else if (h < 4.0/6.0) rgb = vec3(0.0, x, c);
-                else if (h < 5.0/6.0) rgb = vec3(x, 0.0, c);
+                vec3 rgb = vec3(0.0);
+                if (h6 < 1.0) rgb = vec3(c, x, 0.0);
+                else if (h6 < 2.0) rgb = vec3(x, c, 0.0);
+                else if (h6 < 3.0) rgb = vec3(0.0, c, x);
+                else if (h6 < 4.0) rgb = vec3(0.0, x, c);
+                else if (h6 < 5.0) rgb = vec3(x, 0.0, c);
                 else rgb = vec3(c, 0.0, x);
                 
                 return rgb + m;
@@ -129,9 +133,9 @@ export function createBackgroundMaterial() {
                 // Funky color cycling - multiple hue layers (subtle)
                 // Use smooth sinusoidal cycling instead of mod for seamless transitions
                 float baseHue = sin(time * 0.022) * 0.5 + 0.5;
-                float hueWobble = sin(time * 0.6 + plasma * 6.28) * 0.05;
-                float hue1 = mod(baseHue + plasma * 0.25 + liquid * 0.1 + hueWobble, 1.0);
-                float hue2 = mod(baseHue + plasma * 0.35 + liquid * 0.12 - hueWobble, 1.0);
+                float hueWobble = sin(time * 0.6 + plasma * TWO_PI) * 0.05;
+                float hue1 = fract(baseHue + plasma * 0.25 + liquid * 0.1 + hueWobble);
+                float hue2 = fract(baseHue + plasma * 0.35 + liquid * 0.12 - hueWobble);
                 
                 // Pulsating saturation for extra funkiness (subtle)
                 float satPulse = sin(time * 0.7) * 0.05 + 0.95;
@@ -141,7 +145,7 @@ export function createBackgroundMaterial() {
                 saturation2 += n4 * 0.12;
                 
                 // Dynamic brightness with pulsing (subtle)
-                float brightPulse = sin(time * 0.5 + plasma * 3.14) * 0.03 + 1.0;
+                float brightPulse = sin(time * 0.5 + plasma * PI) * 0.03 + 1.0;
                 float centerBoost = 0.20;
                 float edgeDarkness = 0.09;
                 float lightness1 = mix(centerBoost, edgeDarkness, vignette) * brightPulse;
@@ -157,8 +161,8 @@ export function createBackgroundMaterial() {
                 vec3 finalColor = mix(color1, color2, plasma * 0.7 + 0.3);
                 
                 // Add subtle complementary color splashes
-                float accentHue1 = mod(hue1 + 0.5, 1.0);
-                float accentHue2 = mod(hue2 + 0.33, 1.0);
+                float accentHue1 = fract(hue1 + 0.5);
+                float accentHue2 = fract(hue2 + 0.33);
                 vec3 accentColor1 = hsl2rgb(vec3(accentHue1, saturation1 * 0.85, lightness1 * 0.75));
                 vec3 accentColor2 = hsl2rgb(vec3(accentHue2, saturation2 * 0.8, lightness2 * 0.7));
                 

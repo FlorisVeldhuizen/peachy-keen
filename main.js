@@ -1,39 +1,112 @@
-import * as THREE from 'three';
-import { loadSounds } from './audio.js';
+import { Group, PlaneGeometry, Mesh } from 'three';
 import { createBackgroundMaterial } from './shaders.js';
 import { loadPeachModel } from './peach.js';
 import { setupLighting } from './lighting.js';
 import { initInteraction, setPeachMesh, updatePeachPhysics } from './interaction.js';
 import { initScene, setupResizeHandler } from './scene.js';
+import { resumeAudioContext } from './audio.js';
 
-// Initialize audio
-loadSounds();
+// Audio is now lazy-loaded on first interaction for better performance
+
+// Loading screen management
+const soundOverlay = document.getElementById('sound-overlay');
+const loadingProgress = document.getElementById('loading-progress');
+const loadingStatus = document.getElementById('loading-status');
+const loadingItems = document.getElementById('loading-items');
+const soundOverlayContent = document.getElementById('sound-overlay-content');
+let loadingComplete = false;
+let hasStarted = false;
+
+function updateLoadingProgress(percent, status = 'Loading...') {
+    if (loadingProgress) {
+        loadingProgress.style.width = `${percent}%`;
+    }
+    if (loadingStatus) {
+        loadingStatus.textContent = status;
+    }
+}
+
+function showStartButton() {
+    // Hide loading items
+    if (loadingItems) {
+        loadingItems.style.opacity = '0';
+        setTimeout(() => {
+            loadingItems.style.display = 'none';
+            // Show click to start message
+            if (soundOverlayContent) {
+                soundOverlayContent.style.display = 'block';
+            }
+        }, 300);
+    }
+}
+
+function hideLoadingScreen() {
+    if (soundOverlay && loadingComplete && hasStarted) {
+        soundOverlay.style.opacity = '0';
+        setTimeout(() => {
+            soundOverlay.style.display = 'none';
+        }, 300);
+    }
+}
+
+// Handle click anywhere on sound overlay to start
+if (soundOverlay) {
+    soundOverlay.addEventListener('click', async (event) => {
+        if (!loadingComplete || hasStarted) return;
+        
+        // Stop event from propagating to prevent triggering peach smack
+        event.stopPropagation();
+        event.preventDefault();
+        
+        hasStarted = true;
+        
+        // Resume audio context (required by browsers)
+        await resumeAudioContext();
+        
+        // Hide loading screen
+        hideLoadingScreen();
+    });
+}
 
 // Initialize scene, camera, and renderer
+updateLoadingProgress(10, 'Initializing...');
 const { scene, camera, renderer } = initScene();
+updateLoadingProgress(20, 'Creating background...');
 
 // Create and add background
 const backgroundMaterial = createBackgroundMaterial();
-const backgroundGeometry = new THREE.PlaneGeometry(2, 2);
-const background = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+const backgroundGeometry = new PlaneGeometry(2, 2);
+const background = new Mesh(backgroundGeometry, backgroundMaterial);
 scene.add(background);
 
 // Create the peach group
-const peachGroup = new THREE.Group();
+const peachGroup = new Group();
 scene.add(peachGroup);
 
 // Setup lighting
+updateLoadingProgress(40, 'Setting up lights...');
 setupLighting(scene);
 
 // Load the peach model
+updateLoadingProgress(50, 'Loading peach model...');
 loadPeachModel(peachGroup, (meshes) => {
+    updateLoadingProgress(80, 'Preparing physics...');
     setPeachMesh(meshes);
+    updateLoadingProgress(100, 'Ready!');
+    
+    // Show start button once model is loaded
+    setTimeout(() => {
+        loadingComplete = true;
+        showStartButton();
+    }, 300);
 });
 
 // Initialize interaction system
+updateLoadingProgress(60, 'Setting up interactions...');
 initInteraction(peachGroup, camera, scene);
 
 // Setup window resize handler
+updateLoadingProgress(70, 'Finalizing...');
 setupResizeHandler(camera, renderer, backgroundMaterial);
 
 // Idle floating animation timer

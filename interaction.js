@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector3, Euler, Raycaster, Vector2 } from 'three';
 import { playSmackSound, playExplosionSound } from './audio.js';
 import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
@@ -21,12 +21,12 @@ const ROTATION_RETURN_FACTOR = 0.05;
 
 // Physics and interaction state
 export const peachState = {
-    velocity: new THREE.Vector3(0, 0, 0),
-    angularVelocity: new THREE.Vector3(0, 0, 0),
-    physicsOffset: new THREE.Vector3(0, 0, 0), // Offset from default position due to physics
-    physicsRotation: new THREE.Euler(0, 0, 0), // Rotation offset due to physics
-    defaultPosition: new THREE.Vector3(0, 0, 0),
-    defaultRotation: new THREE.Euler(0, 0, 0),
+    velocity: new Vector3(0, 0, 0),
+    angularVelocity: new Vector3(0, 0, 0),
+    physicsOffset: new Vector3(0, 0, 0), // Offset from default position due to physics
+    physicsRotation: new Euler(0, 0, 0), // Rotation offset due to physics
+    defaultPosition: new Vector3(0, 0, 0),
+    defaultRotation: new Euler(0, 0, 0),
     isWobbling: false,
     softBodies: [], // Array of soft body physics instances for each mesh
     rageLevel: 0, // Builds up with each hit (0-100)
@@ -52,8 +52,8 @@ const mouseState = {
 };
 
 // Raycaster for mouse interaction
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
+const raycaster = new Raycaster();
+const mouse = new Vector2();
 
 let peachMesh = null;
 let peachGroup = null;
@@ -323,13 +323,13 @@ function checkHoverSmack() {
         
         // Convert 2D screen velocity to 3D world direction
         // Normalize the velocity to get direction
-        const velocityDir = new THREE.Vector2(avgVelocityX, avgVelocityY).normalize();
+        const velocityDir = new Vector2(avgVelocityX, avgVelocityY).normalize();
         
         // Map screen space to world space direction
         // X: right is positive (keep as is)
         // Y: down is positive in screen space, but up is positive in 3D (invert)
         // Z: push towards camera for satisfying movement
-        const direction = new THREE.Vector3(
+        const direction = new Vector3(
             velocityDir.x,      // Horizontal movement matches screen
             -velocityDir.y,     // Vertical inverted (screen Y is flipped)
             0.4                 // Always push a bit toward camera for nice effect

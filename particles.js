@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { SphereGeometry, MeshStandardMaterial, Group, Vector3, Mesh } from 'three';
 
 /**
  * Particle Explosion System
@@ -38,8 +38,8 @@ export class ParticleExplosion {
         this.fallDuration = FALL_DURATION;
         
         // Particle geometry and material (shared for performance)
-        this.particleGeometry = new THREE.SphereGeometry(PARTICLE_RADIUS, PARTICLE_SPHERE_SEGMENTS, PARTICLE_SPHERE_SEGMENTS);
-        this.particleMaterial = new THREE.MeshStandardMaterial({
+        this.particleGeometry = new SphereGeometry(PARTICLE_RADIUS, PARTICLE_SPHERE_SEGMENTS, PARTICLE_SPHERE_SEGMENTS);
+        this.particleMaterial = new MeshStandardMaterial({
             color: 0xffb0c0,
             roughness: 0.7,
             metalness: 0.0,
@@ -48,7 +48,7 @@ export class ParticleExplosion {
         });
         
         // Group to hold all particles
-        this.particleGroup = new THREE.Group();
+        this.particleGroup = new Group();
         this.scene.add(this.particleGroup);
         
         // Track original vertices for reformation
@@ -95,7 +95,7 @@ export class ParticleExplosion {
             const samplingRate = Math.max(1, Math.floor(positions.count / MAX_PARTICLES));
             
             for (let i = 0; i < positions.count; i += samplingRate) {
-                const vertex = new THREE.Vector3(
+                const vertex = new Vector3(
                     positions.getX(i),
                     positions.getY(i),
                     positions.getZ(i)
@@ -105,11 +105,11 @@ export class ParticleExplosion {
                 vertex.applyMatrix4(mesh.matrixWorld);
                 
                 // Create particle (share geometry, clone material for individual control)
-                const particle = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone());
+                const particle = new Mesh(this.particleGeometry, this.particleMaterial.clone());
                 particle.position.copy(vertex);
                 
                 // Store physics data
-                particle.userData.velocity = new THREE.Vector3(0, 0, 0);
+                particle.userData.velocity = new Vector3(0, 0, 0);
                 particle.userData.originalPosition = vertex.clone();
                 particle.userData.targetPosition = vertex.clone();
                 
@@ -124,7 +124,7 @@ export class ParticleExplosion {
      */
     applyExplosionForces() {
         // Calculate center of explosion (average position)
-        const center = new THREE.Vector3(0, 0, 0);
+        const center = new Vector3(0, 0, 0);
         this.particles.forEach(particle => {
             center.add(particle.position);
         });
@@ -156,7 +156,7 @@ export class ParticleExplosion {
                 Math.random() * Math.PI,
                 Math.random() * Math.PI
             );
-            particle.userData.angularVelocity = new THREE.Vector3(
+            particle.userData.angularVelocity = new Vector3(
                 (Math.random() - 0.5) * 10,
                 (Math.random() - 0.5) * 10,
                 (Math.random() - 0.5) * 10

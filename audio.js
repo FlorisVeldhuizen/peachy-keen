@@ -1,5 +1,5 @@
-// Audio context for sound effects
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+// Audio context for sound effects (lazy initialized)
+let audioContext = null;
 
 // Audio configuration
 const AUDIO_CONFIG = {
@@ -23,35 +23,67 @@ const AUDIO_CONFIG = {
 // Sound buffers
 const slapSounds = [];
 let explosionSound = null;
+let isLoading = false;
+let isLoaded = false;
+
+/**
+ * Initialize audio context (lazy initialization)
+ */
+function getAudioContext() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioContext;
+}
 
 /**
  * Load a single audio file and return the decoded buffer
  */
 async function loadAudioFile(path) {
+    const ctx = getAudioContext();
     const response = await fetch(path);
     const arrayBuffer = await response.arrayBuffer();
-    return await audioContext.decodeAudioData(arrayBuffer);
+    return await ctx.decodeAudioData(arrayBuffer);
 }
 
 /**
- * Load all sound files
+ * Load all sound files (lazy loading - called on first interaction)
  */
 async function loadSounds() {
-    // Load slap sounds
-    for (let i = 0; i < AUDIO_CONFIG.slapSounds.length; i++) {
-        try {
-            const buffer = await loadAudioFile(AUDIO_CONFIG.slapSounds[i]);
-            slapSounds.push(buffer);
-        } catch (error) {
-            console.error(`Error loading slap sound ${i + 1}:`, error);
-        }
-    }
+    if (isLoaded || isLoading) return;
     
-    // Load explosion sound
+    isLoading = true;
+    
     try {
-        explosionSound = await loadAudioFile(AUDIO_CONFIG.explosionSound);
-    } catch (error) {
-        console.error('Error loading explosion sound:', error);
+        // Load slap sounds in parallel
+        const slapPromises = AUDIO_CONFIG.slapSounds.map(path => 
+            loadAudioFile(path).catch(error => {
+                console.error(`Error loading slap sound from ${path}:`, error);
+                return null;
+            })
+        );
+        
+        // Load explosion sound
+        const explosionPromise = loadAudioFile(AUDIO_CONFIG.explosionSound).catch(error => {
+            console.error('Error loading explosion sound:', error);
+            return null;
+        });
+        
+        // Wait for all sounds to load
+        const [loadedSlapSounds, loadedExplosionSound] = await Promise.all([
+            Promise.all(slapPromises),
+            explosionPromise
+        ]);
+        
+        // Store successfully loaded sounds
+        loadedSlapSounds.forEach(buffer => {
+            if (buffer) slapSounds.push(buffer);
+        });
+        
+        explosionSound = loadedExplosionSound;
+        isLoaded = true;
+    } finally {
+        isLoading = false;
     }
 }
 
@@ -60,9 +92,15 @@ async function loadSounds() {
  * @param {number} intensity - Volume intensity (0-1)
  */
 function playSmackSound(intensity = 1.0) {
+    // Lazy load sounds on first interaction
+    if (!isLoaded && !isLoading) {
+        loadSounds();
+    }
+    
     if (slapSounds.length === 0) return;
     
-    const now = audioContext.currentTime;
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
     
     // Randomly select one of the loaded sounds
     const randomSound = slapSounds[Math.floor(Math.random() * slapSounds.length)];
@@ -98,7 +136,7 @@ function playSmackSound(intensity = 1.0) {
     source.connect(lowpass);
     lowpass.connect(highShelf);
     highShelf.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(ctx.destination);
     
     // Play the sound with offset to skip silent beginning
     source.start(now, AUDIO_CONFIG.silentOffset);
@@ -109,9 +147,15 @@ function playSmackSound(intensity = 1.0) {
  * @param {number} intensity - Volume intensity (0-1)
  */
 function playExplosionSound(intensity = 1.0) {
+    // Lazy load sounds on first interaction
+    if (!isLoaded && !isLoading) {
+        loadSounds();
+    }
+    
     if (!explosionSound) return;
     
-    const now = audioContext.currentTime;
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
     
     // Create buffer source
     const source = audioContext.createBufferSource();
@@ -123,7 +167,7 @@ function playExplosionSound(intensity = 1.0) {
     
     // Connect the audio graph
     source.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(ctx.destination);
     
     // Play the sound
     source.start(now);
@@ -133,8 +177,9 @@ function playExplosionSound(intensity = 1.0) {
  * Resume audio context (required for browsers that suspend audio until user interaction)
  */
 async function resumeAudioContext() {
-    if (audioContext.state === 'suspended') {
-        await audioContext.resume();
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+        await ctx.resume();
     }
 }
 

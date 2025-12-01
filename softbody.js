@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector3 } from 'three';
 
 /**
  * Soft Body Physics System for Jiggle Effects
@@ -50,9 +50,9 @@ export class SoftBodyPhysics {
         this.frameCount = 0;        // For reducing normal recalculation frequency
         
         // Reusable vectors to avoid garbage collection
-        this.tempVec1 = new THREE.Vector3();
-        this.tempVec2 = new THREE.Vector3();
-        this.tempVec3 = new THREE.Vector3();
+        this.tempVec1 = new Vector3();
+        this.tempVec2 = new Vector3();
+        this.tempVec3 = new Vector3();
         
         this.init();
     }
@@ -66,13 +66,13 @@ export class SoftBodyPhysics {
         
         // Store original positions and initialize physics arrays
         for (let i = 0; i < positions.count; i++) {
-            this.originalPositions.push(new THREE.Vector3(
+            this.originalPositions.push(new Vector3(
                 positions.getX(i),
                 positions.getY(i),
                 positions.getZ(i)
             ));
-            this.vertexVelocities.push(new THREE.Vector3(0, 0, 0));
-            this.vertexForces.push(new THREE.Vector3(0, 0, 0));
+            this.vertexVelocities.push(new Vector3(0, 0, 0));
+            this.vertexForces.push(new Vector3(0, 0, 0));
         }
         
         // Build vertex groups - vertices at the same position are grouped
@@ -362,7 +362,7 @@ export class SoftBodyPhysics {
                 processedGroups.add(representative);
                 
                 // Average the forces from all vertices in the group
-                const avgForce = new THREE.Vector3(0, 0, 0);
+                const avgForce = new Vector3(0, 0, 0);
                 for (const idx of group) {
                     avgForce.add(this.vertexForces[idx]);
                 }
