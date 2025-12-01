@@ -4,7 +4,6 @@ import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
 import { toggleOilEffect } from './peach.js';
 
-// Constants
 const PHYSICS_DAMPING = 0.95;
 const RETURN_FORCE = 0.05;
 const ANGULAR_DAMPING = 0.92;
@@ -336,15 +335,15 @@ function checkHoverSmack() {
         ).normalize();
         
         // Scale force based on velocity (faster movement = harder hit)
-        const velocityScale = Math.min(velocityMagnitude / 20, 3); // Cap at 3x
-        const force = 2.0 * velocityScale;
+        const velocityScale = Math.min(velocityMagnitude / 20, 2.0); // Cap at 2x for controlled but responsive movement
+        const force = 1.7 * velocityScale; // Moderate base force
         peachState.velocity.add(direction.multiplyScalar(force));
         
-        // Add angular velocity based on impact force
+        // Add angular velocity based on impact force (moderate rotation)
         peachState.angularVelocity.set(
-            (Math.random() - 0.5) * 5 * velocityScale,
-            (Math.random() - 0.5) * 5 * velocityScale,
-            (Math.random() - 0.5) * 5 * velocityScale
+            (Math.random() - 0.5) * 4 * velocityScale,
+            (Math.random() - 0.5) * 4 * velocityScale,
+            (Math.random() - 0.5) * 4 * velocityScale
         );
         
         peachState.isWobbling = true;
