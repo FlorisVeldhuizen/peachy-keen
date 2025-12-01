@@ -16,17 +16,6 @@ An interactive Three.js experience featuring a 3D peach with a psychedelic shade
 - Loading items fade out to reveal minimal click-to-start button
 - Scene renders immediately for instant visual feedback
 
-## Performance
-
-This project has been heavily optimized for production:
-- ✨ **Tree-shaking** - 30-40% smaller bundle size
-- 🚀 **Lazy loading** - Audio loads on first interaction
-- ⚡ **Optimized shaders** - Improved GPU performance
-- 📦 **Build optimization** - Minified with Terser, chunked for caching
-- 🎨 **Loading screen** - Smooth user experience with progress feedback
-
-See [PERFORMANCE.md](./PERFORMANCE.md) for detailed optimization guide.
-
 ## Setup
 
 ```bash
