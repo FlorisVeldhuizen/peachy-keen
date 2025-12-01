@@ -3,16 +3,21 @@ import { AmbientLight, TorusGeometry, MeshStandardMaterial, Mesh, PointLight, Di
 /**
  * Setup atmospheric lighting with influencer-style ring light
  * @param {THREE.Scene} scene - The scene to add lights to
+ * @returns {Object} Object containing references to all lights for performance toggling
  */
 export function setupLighting(scene) {
     if (!scene) {
         console.error('setupLighting: No scene provided');
-        return;
+        return { ringLights: [], otherLights: [] };
     }
+    
+    const ringLights = [];
+    const otherLights = [];
     
     // Soft ambient base
     const ambientLight = new AmbientLight(0xffeedd, 0.4);
     scene.add(ambientLight);
+    otherLights.push(ambientLight);
 
     // Create the physical ring light (like influencer/beauty ring lights)
     const ringLightGeometry = new TorusGeometry(3.5, 0.15, 16, 100);
@@ -28,6 +33,7 @@ export function setupLighting(scene) {
     ringLightMesh.position.set(0, 0, 6);
     ringLightMesh.rotation.x = 0; // Face the camera/peach
     scene.add(ringLightMesh);
+    ringLights.push(ringLightMesh);
 
     // Add point lights around the ring to actually illuminate the scene
     const numLights = 24;
@@ -40,21 +46,27 @@ export function setupLighting(scene) {
         const light = new PointLight(0xffd9a8, 1.5, 100);
         light.position.set(x, y, 6);
         scene.add(light);
+        ringLights.push(light);
     }
 
     // Soft key light from above for gentle definition
     const keyLight = new DirectionalLight(0xffffff, 0.8);
     keyLight.position.set(0, 5, 8);
     scene.add(keyLight);
+    otherLights.push(keyLight);
 
     // Rim light from behind to enhance contours
     const rimLight = new PointLight(0xffe4d6, 2.0, 100);
     rimLight.position.set(0, 1, -6);
     scene.add(rimLight);
+    otherLights.push(rimLight);
 
     // Subtle fill from below
     const bottomFill = new PointLight(0xffd9c8, 0.6, 100);
     bottomFill.position.set(0, -3, 4);
     scene.add(bottomFill);
+    otherLights.push(bottomFill);
+    
+    return { ringLights, otherLights };
 }
 

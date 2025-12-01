@@ -266,3 +266,207 @@ body {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-20px); }
 }
+
+/* Performance Monitor Gear Button */
+#perf-gear-button {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    color: white;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 9999;
+    display: block;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+}
+
+#perf-gear-button:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: rotate(45deg) scale(1.1);
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+#perf-gear-button:active {
+    transform: rotate(45deg) scale(0.95);
+}
+
+/* Performance Monitor Panel */
+#performance-panel {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 15px;
+    color: white;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    min-width: 280px;
+    z-index: 9999;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    cursor: auto;
+    transition: all 0.3s ease;
+}
+
+
+.perf-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.perf-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+#perf-toggle {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+
+#perf-toggle:hover {
+    background: rgba(255, 100, 100, 0.3);
+    border-color: rgba(255, 100, 100, 0.5);
+}
+
+
+.perf-content {
+    display: block;
+}
+
+.perf-stats {
+    margin-bottom: 15px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.stat-label {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stat-value {
+    font-weight: bold;
+    color: white;
+}
+
+.stat-value.good {
+    color: #4CAF50;
+}
+
+.stat-value.warning {
+    color: #FFC107;
+}
+
+.stat-value.bad {
+    color: #F44336;
+}
+
+.perf-controls {
+    margin-bottom: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.perf-controls h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+    margin-right: 8px;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.toggle-label span {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.perf-actions {
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.perf-button {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid rgba(76, 175, 80, 0.5);
+    color: #4CAF50;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.perf-button:hover {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.7);
+}
+
+.perf-button:active {
+    background: rgba(76, 175, 80, 0.4);
+}
+
+@media (max-width: 600px) {
+    #perf-gear-button {
+        top: 10px;
+        left: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+    
+    #performance-panel {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        min-width: unset;
+        font-size: 11px;
+    }
+    
+    .perf-header h3 {
+        font-size: 14px;
+    }
+}

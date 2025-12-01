@@ -5,6 +5,7 @@ import { setupLighting } from './lighting.js';
 import { initInteraction, setPeachMesh, updatePeachPhysics } from './interaction.js';
 import { initScene, setupResizeHandler } from './scene.js';
 import { resumeAudioContext } from './audio.js';
+import { PerformanceMonitor } from './performance.js';
 
 // Audio is now lazy-loaded on first interaction for better performance
 
@@ -71,6 +72,11 @@ if (soundOverlay) {
 // Initialize scene, camera, and renderer
 updateLoadingProgress(10, 'Initializing...');
 const { scene, camera, renderer } = initScene();
+
+// Initialize performance monitor
+const perfMonitor = new PerformanceMonitor();
+perfMonitor.setRenderer(renderer);
+
 updateLoadingProgress(20, 'Creating background...');
 
 // Create and add background
@@ -79,13 +85,19 @@ const backgroundGeometry = new PlaneGeometry(2, 2);
 const background = new Mesh(backgroundGeometry, backgroundMaterial);
 scene.add(background);
 
+// Set reference for performance monitoring
+perfMonitor.setBackgroundMesh(background);
+
 // Create the peach group
 const peachGroup = new Group();
 scene.add(peachGroup);
 
 // Setup lighting
 updateLoadingProgress(40, 'Setting up lights...');
-setupLighting(scene);
+const { ringLights, otherLights } = setupLighting(scene);
+
+// Set ring lights reference for performance monitoring
+perfMonitor.setRingLights(ringLights);
 
 // Load the peach model
 updateLoadingProgress(50, 'Loading peach model...');
@@ -119,11 +131,17 @@ function animate() {
     const delta = 0.016; // ~60fps
     idleTime += delta;
     
-    // Update background shader
-    backgroundMaterial.uniforms.time.value += delta;
+    // Update background shader (only if enabled)
+    if (perfMonitor.isFeatureEnabled('backgroundShader')) {
+        backgroundMaterial.uniforms.time.value += delta;
+    }
     
     // Update peach physics and animation
-    updatePeachPhysics(delta, idleTime);
+    // Pass performance monitor to check if physics is enabled
+    updatePeachPhysics(delta, idleTime, perfMonitor);
+    
+    // Update performance monitor
+    perfMonitor.update();
     
     renderer.render(scene, camera);
 }

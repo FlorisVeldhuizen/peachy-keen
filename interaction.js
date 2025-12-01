@@ -350,6 +350,8 @@ function checkHoverSmack() {
         // Keep idle animation running in the background
         
         // Apply soft body impulse for jiggle effect at the intersection point
+        // (Note: This doesn't check perfMonitor since we don't have access here,
+        // but the actual physics update will be skipped if disabled)
         const intersectPoint = intersects[0].point;
         const jiggleForce = 0.18 * velocityScale; // Force for vertex deformation
         peachState.softBodies.forEach(softBody => {
@@ -423,8 +425,9 @@ function updateRageMeter() {
  * Update peach physics and animation
  * @param {number} delta - Time delta since last frame
  * @param {number} idleTime - Total idle animation time
+ * @param {PerformanceMonitor} perfMonitor - Optional performance monitor for feature toggling
  */
-export function updatePeachPhysics(delta, idleTime) {
+export function updatePeachPhysics(delta, idleTime, perfMonitor = null) {
     if (!peachGroup) return;
     
     // Validate delta to prevent physics explosions
@@ -433,8 +436,9 @@ export function updatePeachPhysics(delta, idleTime) {
     // Always update idle animation time (runs continuously as base layer)
     peachState.idleAnimationTime += delta;
     
-    // Update particle explosion if active
-    if (peachState.particleExplosion) {
+    // Update particle explosion if active (check if particles are enabled)
+    const particlesEnabled = !perfMonitor || perfMonitor.isFeatureEnabled('particles');
+    if (peachState.particleExplosion && particlesEnabled) {
         peachState.particleExplosion.update(delta);
         
         // Skip normal physics during explosion
@@ -487,10 +491,13 @@ export function updatePeachPhysics(delta, idleTime) {
         updateRageMeter();
     }
     
-    // Update soft body physics (jiggle)
-    peachState.softBodies.forEach(softBody => {
-        softBody.update(delta);
-    });
+    // Update soft body physics (jiggle) - only if enabled
+    const physicsEnabled = !perfMonitor || perfMonitor.isFeatureEnabled('softBodyPhysics');
+    if (physicsEnabled) {
+        peachState.softBodies.forEach(softBody => {
+            softBody.update(delta);
+        });
+    }
     
     // If wobbling, update physics offset
     if (peachState.isWobbling) {
