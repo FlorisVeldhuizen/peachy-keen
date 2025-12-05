@@ -153,34 +153,34 @@ body::after {
     top: 20px;
     right: 20px;
     padding: 10px 20px;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     font-size: 14px;
     font-weight: 500;
     cursor: none;
     backdrop-filter: blur(10px);
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     z-index: 10;
     pointer-events: auto;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 #oil-button:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: scale(1.02);
 }
 
 #oil-button:active {
-    transform: translateY(0px);
-    background: rgba(255, 255, 255, 0.2);
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 #oil-button.oiled {
-    background: rgba(100, 200, 255, 0.25);
-    border-color: rgba(100, 200, 255, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 @media (max-width: 600px) {
@@ -287,28 +287,28 @@ body::after {
     left: 20px;
     width: 44px;
     height: 44px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 50%;
     color: white;
     font-size: 22px;
     cursor: none;
     z-index: 9999;
     display: block;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     pointer-events: auto;
 }
 
 #perf-gear-button:hover {
-    background: rgba(0, 0, 0, 0.9);
-    transform: rotate(45deg) scale(1.1);
-    border-color: rgba(76, 175, 80, 0.5);
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 #perf-gear-button:active {
-    transform: rotate(45deg) scale(0.95);
+    transform: scale(0.95);
 }
 
 /* Performance Monitor Panel */
@@ -350,8 +350,8 @@ body::after {
 }
 
 #perf-toggle {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: white;
     border-radius: 4px;
     width: 24px;
@@ -360,12 +360,13 @@ body::after {
     font-size: 18px;
     font-weight: bold;
     line-height: 1;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
 }
 
 #perf-toggle:hover {
-    background: rgba(255, 100, 100, 0.3);
-    border-color: rgba(255, 100, 100, 0.5);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
 }
 
 
@@ -501,23 +502,25 @@ body::after {
 .perf-button {
     width: 100%;
     padding: 8px 12px;
-    background: rgba(76, 175, 80, 0.2);
-    border: 1px solid rgba(76, 175, 80, 0.5);
-    color: #4CAF50;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
     border-radius: 5px;
     cursor: none;
     font-size: 12px;
-    font-weight: bold;
-    transition: all 0.2s ease;
+    font-weight: 500;
+    transition: all 0.15s ease;
 }
 
 .perf-button:hover {
-    background: rgba(76, 175, 80, 0.3);
-    border-color: rgba(76, 175, 80, 0.7);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: scale(1.02);
 }
 
 .perf-button:active {
-    background: rgba(76, 175, 80, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.98);
 }
 
 @media (max-width: 600px) {
