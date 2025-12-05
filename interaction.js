@@ -58,14 +58,16 @@ let peachMesh = null;
 let peachGroup = null;
 let camera = null;
 let handCursor = null;
+let lightingModeSwitcher = null;
 
 /**
  * Initialize the interaction system
  * @param {THREE.Group} peachGroupRef - The peach group
  * @param {THREE.Camera} cameraRef - The camera
  * @param {THREE.Scene} sceneRef - The scene
+ * @param {Function} setLightingMode - Function to switch between normal and oiled lighting modes
  */
-export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
+export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingMode = null) {
     if (!peachGroupRef || !cameraRef) {
         console.error('initInteraction: Missing required parameters');
         return;
@@ -74,6 +76,7 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
     peachGroup = peachGroupRef;
     camera = cameraRef;
     handCursor = document.getElementById('hand-cursor');
+    lightingModeSwitcher = setLightingMode;
     
     if (!handCursor) {
         console.warn('Hand cursor element not found');
@@ -97,6 +100,13 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
     if (oilButton) {
         oilButton.addEventListener('click', () => {
             const isOiled = toggleOilEffect();
+            
+            // Switch lighting mode based on oil state
+            if (lightingModeSwitcher) {
+                lightingModeSwitcher(isOiled);
+                console.log(`🔆 Lighting mode: ${isOiled ? 'Full quality (oiled)' : 'Performance (normal)'}`);
+            }
+            
             if (isOiled) {
                 oilButton.textContent = '💧 Oiled Up!';
                 oilButton.classList.add('oiled');
