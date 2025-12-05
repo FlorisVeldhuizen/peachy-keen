@@ -197,6 +197,13 @@ export class PerformanceMonitor {
                 this.ringLights.forEach(light => {
                     light.visible = enabled;
                 });
+                
+                // Enable/disable the slider based on ring lights state
+                const slider = document.getElementById('light-count-slider');
+                if (slider) {
+                    slider.disabled = !enabled;
+                }
+                
                 console.log(`Ring Lights: ${enabled ? 'ON' : 'OFF'}`);
                 break;
                 
