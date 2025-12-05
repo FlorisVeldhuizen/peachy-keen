@@ -314,7 +314,7 @@ body::after {
 /* Performance Monitor Panel */
 #performance-panel {
     position: fixed;
-    top: 20px;
+    top: 72px;
     left: 20px;
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(10px);
@@ -325,7 +325,7 @@ body::after {
     font-family: 'Courier New', monospace;
     font-size: 13px;
     min-width: 280px;
-    z-index: 9999;
+    z-index: 9998;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     pointer-events: auto;
     cursor: none;
@@ -552,7 +552,7 @@ body::after {
     }
     
     #performance-panel {
-        top: 10px;
+        top: 58px;
         left: 10px;
         right: 10px;
         min-width: unset;

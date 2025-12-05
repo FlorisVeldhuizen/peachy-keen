@@ -154,17 +154,16 @@ export class PerformanceMonitor {
         const toggleBtn = document.getElementById('perf-toggle');
         const content = document.querySelector('.perf-content');
         
-        // Gear button opens the panel
+        // Gear button toggles the panel
         gearButton.addEventListener('click', () => {
-            panel.style.display = 'block';
-            gearButton.style.display = 'none';
-            content.style.display = 'block';
+            const isOpen = panel.style.display === 'block';
+            panel.style.display = isOpen ? 'none' : 'block';
+            content.style.display = isOpen ? 'none' : 'block';
         });
         
-        // Close button hides the panel and shows gear button
+        // Close button hides the panel
         toggleBtn.addEventListener('click', () => {
             panel.style.display = 'none';
-            gearButton.style.display = 'block';
             content.style.display = 'none';
         });
         
