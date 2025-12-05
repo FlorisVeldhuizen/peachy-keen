@@ -3,20 +3,7 @@ import { playSmackSound, playExplosionSound } from './audio.js';
 import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
 import { toggleOilEffect } from './peach.js';
-
-const PHYSICS_DAMPING = 0.95;
-const RETURN_FORCE = 0.05;
-const ANGULAR_DAMPING = 0.92;
-const SMACK_COOLDOWN_MS = 200;
-const VELOCITY_HISTORY_SIZE = 5;
-const MIN_VELOCITY_THRESHOLD = 2;
-const RAGE_DECAY_RATE = 15;
-const RAGE_EXPLOSION_THRESHOLD = 100;
-const RAGE_BASE_INCREASE = 4;
-const RAGE_VELOCITY_MULTIPLIER = 3;
-const RESPAWN_DURATION = 0.9;
-const VELOCITY_SETTLE_THRESHOLD = 0.01;
-const ROTATION_RETURN_FACTOR = 0.05;
+import { PHYSICS_CONFIG, INTERACTION_CONFIG } from './config.js';
 
 // Physics and interaction state
 export const peachState = {
@@ -29,12 +16,12 @@ export const peachState = {
     isWobbling: false,
     softBodies: [], // Array of soft body physics instances for each mesh
     rageLevel: 0, // Builds up with each hit (0-100)
-    rageDecayRate: RAGE_DECAY_RATE,
-    explosionThreshold: RAGE_EXPLOSION_THRESHOLD,
+    rageDecayRate: INTERACTION_CONFIG.RAGE_DECAY_RATE,
+    explosionThreshold: INTERACTION_CONFIG.RAGE_EXPLOSION_THRESHOLD,
     particleExplosion: null, // Reference to particle explosion system
     isRespawning: false, // Is the peach currently respawning?
     respawnTimer: 0, // Timer for respawn animation
-    respawnDuration: RESPAWN_DURATION,
+    respawnDuration: INTERACTION_CONFIG.RESPAWN_DURATION,
     idleAnimationTime: 0 // Separate time counter for idle animation (always running)
 };
 
@@ -44,9 +31,9 @@ const mouseState = {
     lastPosition: { x: 0, y: 0 },
     velocity: { x: 0, y: 0 },
     lastSmackTime: 0,
-    smackCooldown: SMACK_COOLDOWN_MS,
+    smackCooldown: INTERACTION_CONFIG.SMACK_COOLDOWN_MS,
     velocityHistory: [],
-    maxHistorySize: VELOCITY_HISTORY_SIZE,
+    maxHistorySize: INTERACTION_CONFIG.VELOCITY_HISTORY_SIZE,
     isHoveringPeach: false // Track if cursor is currently over the peach
 };
 
@@ -58,7 +45,6 @@ let peachMesh = null;
 let peachGroup = null;
 let camera = null;
 let handCursor = null;
-let lightingModeSwitcher = null;
 let performanceMonitor = null;
 
 /**
@@ -66,10 +52,9 @@ let performanceMonitor = null;
  * @param {THREE.Group} peachGroupRef - The peach group
  * @param {THREE.Camera} cameraRef - The camera
  * @param {THREE.Scene} sceneRef - The scene
- * @param {Function} setLightingMode - Function to switch between normal and oiled lighting modes
  * @param {PerformanceMonitor} perfMonitor - Optional performance monitor to notify of mode changes
  */
-export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingMode = null, perfMonitor = null) {
+export function initInteraction(peachGroupRef, cameraRef, sceneRef, perfMonitor = null) {
     if (!peachGroupRef || !cameraRef) {
         console.error('initInteraction: Missing required parameters');
         return;
@@ -78,7 +63,6 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingM
     peachGroup = peachGroupRef;
     camera = cameraRef;
     handCursor = document.getElementById('hand-cursor');
-    lightingModeSwitcher = setLightingMode;
     performanceMonitor = perfMonitor;
     
     if (!handCursor) {
@@ -104,13 +88,7 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingM
         oilButton.addEventListener('click', () => {
             const isOiled = toggleOilEffect();
             
-            // Switch lighting mode based on oil state
-            if (lightingModeSwitcher) {
-                lightingModeSwitcher(isOiled);
-                console.log(`🔆 Lighting mode: ${isOiled ? 'Full quality (oiled)' : 'Performance (normal)'}`);
-            }
-            
-            // Update performance monitor slider to match mode
+            // Update performance monitor to match mode
             if (performanceMonitor) {
                 performanceMonitor.setLightingMode(isOiled);
             }
@@ -344,7 +322,7 @@ function checkHoverSmack() {
         );
         
         // Only smack if moving fast enough (minimum threshold)
-        if (velocityMagnitude < MIN_VELOCITY_THRESHOLD) return;
+        if (velocityMagnitude < INTERACTION_CONFIG.MIN_VELOCITY_THRESHOLD) return;
         
         mouseState.lastSmackTime = currentTime;
         
@@ -402,8 +380,8 @@ function checkHoverSmack() {
         mouseState.isHoveringPeach = true;
         
         // Increase rage level based on hit intensity
-        const rageIncrease = RAGE_BASE_INCREASE + (velocityScale * RAGE_VELOCITY_MULTIPLIER);
-        peachState.rageLevel = Math.min(RAGE_EXPLOSION_THRESHOLD, peachState.rageLevel + rageIncrease);
+        const rageIncrease = INTERACTION_CONFIG.RAGE_BASE_INCREASE + (velocityScale * INTERACTION_CONFIG.RAGE_VELOCITY_MULTIPLIER);
+        peachState.rageLevel = Math.min(peachState.explosionThreshold, peachState.rageLevel + rageIncrease);
         
         // Update rage meter UI
         updateRageMeter();
@@ -557,20 +535,20 @@ export function updatePeachPhysics(delta, idleTime, perfMonitor = null) {
         peachState.physicsRotation.z += peachState.angularVelocity.z * delta;
         
         // Apply damping
-        peachState.velocity.multiplyScalar(PHYSICS_DAMPING);
-        peachState.angularVelocity.multiplyScalar(ANGULAR_DAMPING);
+        peachState.velocity.multiplyScalar(PHYSICS_CONFIG.DAMPING);
+        peachState.angularVelocity.multiplyScalar(PHYSICS_CONFIG.ANGULAR_DAMPING);
         
         // Return force pulls physics offset back to zero
-        const toDefault = peachState.physicsOffset.clone().multiplyScalar(-RETURN_FORCE);
+        const toDefault = peachState.physicsOffset.clone().multiplyScalar(-PHYSICS_CONFIG.RETURN_FORCE);
         peachState.velocity.add(toDefault);
         
         // Return to default rotation gradually
-        peachState.physicsRotation.x += (0 - peachState.physicsRotation.x) * ROTATION_RETURN_FACTOR;
-        peachState.physicsRotation.y += (0 - peachState.physicsRotation.y) * ROTATION_RETURN_FACTOR;
-        peachState.physicsRotation.z += (0 - peachState.physicsRotation.z) * ROTATION_RETURN_FACTOR;
+        peachState.physicsRotation.x += (0 - peachState.physicsRotation.x) * PHYSICS_CONFIG.ROTATION_RETURN_FACTOR;
+        peachState.physicsRotation.y += (0 - peachState.physicsRotation.y) * PHYSICS_CONFIG.ROTATION_RETURN_FACTOR;
+        peachState.physicsRotation.z += (0 - peachState.physicsRotation.z) * PHYSICS_CONFIG.ROTATION_RETURN_FACTOR;
         
         // Check if peach has settled
-        if (velocityLength < VELOCITY_SETTLE_THRESHOLD && angularVelLength < VELOCITY_SETTLE_THRESHOLD) {
+        if (velocityLength < PHYSICS_CONFIG.VELOCITY_SETTLE_THRESHOLD && angularVelLength < PHYSICS_CONFIG.VELOCITY_SETTLE_THRESHOLD) {
             peachState.isWobbling = false;
             peachState.velocity.set(0, 0, 0);
             peachState.angularVelocity.set(0, 0, 0);

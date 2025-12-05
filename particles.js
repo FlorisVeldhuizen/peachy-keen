@@ -1,26 +1,11 @@
 import { SphereGeometry, MeshStandardMaterial, Group, Vector3, Mesh } from 'three';
+import { PARTICLE_CONFIG } from './config.js';
 
 /**
  * Particle Explosion System
  * When the peach takes too much damage, it explodes into particles
  * that dramatically scatter and then slowly reform
  */
-
-// Particle system constants
-const PARTICLE_SPHERE_SEGMENTS = 8;
-const PARTICLE_RADIUS = 0.05;
-const MAX_PARTICLES = 300;
-const EXPLOSION_FORCE = 8.0;
-const FALL_DURATION = 1.8;
-const FADE_START_TIME = 1.0;
-const FADE_DURATION = 0.8;
-const GRAVITY_STRENGTH = 15.0;
-const AIR_RESISTANCE = 0.99;
-const ROTATION_DAMPING = 0.98;
-const UPWARD_BIAS = 2.0;
-const EMISSIVE_BASE = 0.3;
-const EMISSIVE_PULSE_AMPLITUDE = 0.2;
-const EMISSIVE_PULSE_FREQUENCY = 10;
 
 export class ParticleExplosion {
     constructor(mesh, scene, onComplete) {
@@ -34,17 +19,17 @@ export class ParticleExplosion {
         this.particles = [];
         this.isExploding = false;
         this.explosionTimer = 0;
-        this.explosionForce = EXPLOSION_FORCE;
-        this.fallDuration = FALL_DURATION;
+        this.explosionForce = PARTICLE_CONFIG.EXPLOSION_FORCE;
+        this.fallDuration = PARTICLE_CONFIG.FALL_DURATION;
         
         // Particle geometry and material (shared for performance)
-        this.particleGeometry = new SphereGeometry(PARTICLE_RADIUS, PARTICLE_SPHERE_SEGMENTS, PARTICLE_SPHERE_SEGMENTS);
+        this.particleGeometry = new SphereGeometry(PARTICLE_CONFIG.RADIUS, PARTICLE_CONFIG.SPHERE_SEGMENTS, PARTICLE_CONFIG.SPHERE_SEGMENTS);
         this.particleMaterial = new MeshStandardMaterial({
             color: 0xffb0c0,
             roughness: 0.7,
             metalness: 0.0,
             emissive: 0xff7090,
-            emissiveIntensity: EMISSIVE_BASE
+            emissiveIntensity: PARTICLE_CONFIG.EMISSIVE_BASE
         });
         
         // Group to hold all particles
@@ -92,7 +77,7 @@ export class ParticleExplosion {
             const positions = geometry.attributes.position;
             
             // Sample every Nth vertex to create particles
-            const samplingRate = Math.max(1, Math.floor(positions.count / MAX_PARTICLES));
+            const samplingRate = Math.max(1, Math.floor(positions.count / PARTICLE_CONFIG.MAX_PARTICLES));
             
             for (let i = 0; i < positions.count; i += samplingRate) {
                 const vertex = new Vector3(
@@ -148,7 +133,7 @@ export class ParticleExplosion {
             particle.userData.velocity.copy(direction).multiplyScalar(forceMagnitude);
             
             // Add slight upward bias for dramatic effect
-            particle.userData.velocity.y += UPWARD_BIAS;
+            particle.userData.velocity.y += PARTICLE_CONFIG.UPWARD_BIAS;
             
             // Random rotation for visual interest
             particle.rotation.set(
@@ -174,8 +159,8 @@ export class ParticleExplosion {
         
         // Calculate fade progress (starts after particles have fallen)
         let fadeProgress = 0;
-        if (this.explosionTimer > FADE_START_TIME) {
-            fadeProgress = Math.min(1.0, (this.explosionTimer - FADE_START_TIME) / FADE_DURATION);
+        if (this.explosionTimer > PARTICLE_CONFIG.FADE_START_TIME) {
+            fadeProgress = Math.min(1.0, (this.explosionTimer - PARTICLE_CONFIG.FADE_START_TIME) / PARTICLE_CONFIG.FADE_DURATION);
         }
         
         // Update each particle
@@ -183,11 +168,11 @@ export class ParticleExplosion {
             const velocity = particle.userData.velocity;
             
             // Apply gravity
-            velocity.y -= GRAVITY_STRENGTH * delta;
+            velocity.y -= PARTICLE_CONFIG.GRAVITY_STRENGTH * delta;
             
             // Air resistance
-            velocity.x *= AIR_RESISTANCE;
-            velocity.z *= AIR_RESISTANCE;
+            velocity.x *= PARTICLE_CONFIG.AIR_RESISTANCE;
+            velocity.z *= PARTICLE_CONFIG.AIR_RESISTANCE;
             
             // Update position
             particle.position.add(velocity.clone().multiplyScalar(delta));
@@ -199,18 +184,18 @@ export class ParticleExplosion {
             particle.rotation.z += angularVel.z * delta;
             
             // Slow down rotation over time
-            angularVel.multiplyScalar(ROTATION_DAMPING);
+            angularVel.multiplyScalar(PARTICLE_CONFIG.ROTATION_DAMPING);
             
             // Pulse emissive intensity during explosion
             if (fadeProgress === 0) {
-                particle.material.emissiveIntensity = EMISSIVE_BASE + Math.sin(this.explosionTimer * EMISSIVE_PULSE_FREQUENCY) * EMISSIVE_PULSE_AMPLITUDE;
+                particle.material.emissiveIntensity = PARTICLE_CONFIG.EMISSIVE_BASE + Math.sin(this.explosionTimer * PARTICLE_CONFIG.EMISSIVE_PULSE_FREQUENCY) * PARTICLE_CONFIG.EMISSIVE_PULSE_AMPLITUDE;
             } else {
                 // Fade out particles
                 const fadeAmount = 1.0 - fadeProgress;
                 particle.scale.setScalar(fadeAmount);
                 particle.material.opacity = fadeAmount;
                 particle.material.transparent = true;
-                particle.material.emissiveIntensity = EMISSIVE_BASE * fadeAmount;
+                particle.material.emissiveIntensity = PARTICLE_CONFIG.EMISSIVE_BASE * fadeAmount;
             }
         });
         

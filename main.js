@@ -99,13 +99,10 @@ scene.add(peachGroup);
 
 // Setup lighting
 updateLoadingProgress(40, 'Setting up lights...');
-const { ringLights, otherLights, setOiledMode } = setupLighting(scene);
+const { ringLights, otherLights } = setupLighting(scene);
 
-// Set ring lights reference for performance monitoring (pass mode callback)
-perfMonitor.setRingLights(ringLights, setOiledMode);
-
-// Store the lighting mode switcher for later use
-let lightingModeSwitcher = setOiledMode;
+// Set ring lights reference for performance monitoring
+perfMonitor.setRingLights(ringLights);
 
 // Load the peach model
 updateLoadingProgress(50, 'Loading peach model...');
@@ -123,7 +120,7 @@ loadPeachModel(peachGroup, (meshes) => {
 
 // Initialize interaction system
 updateLoadingProgress(60, 'Setting up interactions...');
-initInteraction(peachGroup, camera, scene, lightingModeSwitcher, perfMonitor);
+initInteraction(peachGroup, camera, scene, perfMonitor);
 
 // Setup window resize handler
 updateLoadingProgress(70, 'Finalizing...');

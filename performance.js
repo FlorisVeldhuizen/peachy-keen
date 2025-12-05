@@ -1,3 +1,5 @@
+import { LIGHTING_CONFIG } from './config.js';
+
 /**
  * Performance Monitoring and Control System
  * Tracks FPS and allows toggling of performance-heavy features
@@ -40,17 +42,17 @@ export class PerformanceMonitor {
         this.ringLightMesh = null; // The physical torus mesh
         this.ringPointLights = []; // Just the point lights (not the mesh)
         this.isOiledMode = false; // Track current lighting mode
-        this.maxLightsNormalMode = 6;  // Match LIGHTING_CONFIG.NORMAL_MODE_LIGHTS
-        this.maxLightsOiledMode = 24;  // Match LIGHTING_CONFIG.OILED_MODE_LIGHTS
+        this.maxLightsNormalMode = LIGHTING_CONFIG.NORMAL_MODE_LIGHTS;
+        this.maxLightsOiledMode = LIGHTING_CONFIG.OILED_MODE_LIGHTS;
         this.lightingModeCallback = null; // Reference to setOiledMode function from lighting.js
         
         // Track light counts independently per mode
-        this.normalModeLightCount = 6;  // Default for normal mode
-        this.oiledModeLightCount = 24;  // Default for oiled mode
+        this.normalModeLightCount = LIGHTING_CONFIG.NORMAL_MODE_LIGHTS;
+        this.oiledModeLightCount = LIGHTING_CONFIG.OILED_MODE_LIGHTS;
         
         // Track intensities independently per mode
-        this.normalModeIntensity = 6.0; // Default LIGHTING_CONFIG.RING_LIGHT_INTENSITY_NORMAL
-        this.oiledModeIntensity = 2.5;  // Default LIGHTING_CONFIG.RING_LIGHT_INTENSITY_OILED
+        this.normalModeIntensity = LIGHTING_CONFIG.RING_LIGHT_INTENSITY_NORMAL;
+        this.oiledModeIntensity = LIGHTING_CONFIG.RING_LIGHT_INTENSITY_OILED;
         
         this.createUI();
     }
@@ -397,8 +399,8 @@ export class PerformanceMonitor {
         }
         
         const currentCount = this.ringPointLights.length;
-        const ringRadius = 3.5;
-        const zPosition = 6;
+        const ringRadius = LIGHTING_CONFIG.RING_RADIUS;
+        const zPosition = LIGHTING_CONFIG.RING_POSITION_Z;
         
         // Get current intensity from mode setting (for new lights only)
         const intensity = this.isOiledMode ? this.oiledModeIntensity : this.normalModeIntensity;
@@ -412,7 +414,7 @@ export class PerformanceMonitor {
                     const x = Math.cos(angle) * ringRadius;
                     const y = Math.sin(angle) * ringRadius;
                     
-                    const light = new PointLight(0xffd9a8, intensity, 100);
+                    const light = new PointLight(LIGHTING_CONFIG.RING_COLOR, intensity, LIGHTING_CONFIG.RING_LIGHT_DISTANCE);
                     light.position.set(x, y, zPosition);
                     this.scene.add(light);
                     this.ringPointLights.push(light);

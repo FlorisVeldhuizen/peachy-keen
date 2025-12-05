@@ -1,18 +1,10 @@
 import { Vector3 } from 'three';
+import { PHYSICS_CONFIG } from './config.js';
 
 /**
  * Soft Body Physics System for Jiggle Effects
  * Applies spring-mass dynamics to vertices for realistic deformation
  */
-
-// Physics constants
-const VERTEX_POSITION_TOLERANCE = 0.0001;
-const PROXIMITY_THRESHOLD = 0.3;
-const PROXIMITY_SAMPLING_STEP_DIVISOR = 100;
-const SETTLE_THRESHOLD = 0.01;
-const MAX_VELOCITY_CAP = 0.5;
-const MAX_VELOCITY_CAP_SINGLE = 0.25;
-const NORMAL_RECALC_INTERVAL = 3;
 
 export class SoftBodyPhysics {
     constructor(mesh) {
@@ -86,7 +78,7 @@ export class SoftBodyPhysics {
     
     buildVertexGroups() {
         // Group vertices that share the same position (within tolerance)
-        const tolerance = VERTEX_POSITION_TOLERANCE;
+        const tolerance = PHYSICS_CONFIG.VERTEX_POSITION_TOLERANCE;
         const positions = this.geometry.attributes.position;
         const posArray = positions.array;
         const positionMap = new Map();
@@ -160,7 +152,7 @@ export class SoftBodyPhysics {
         // Fallback: use proximity-based neighbors
         const positions = this.geometry.attributes.position;
         const posArray = positions.array;
-        const threshold = PROXIMITY_THRESHOLD;
+        const threshold = PHYSICS_CONFIG.PROXIMITY_THRESHOLD;
         const thresholdSq = threshold * threshold; // Use squared distance (faster)
         
         for (let i = 0; i < positions.count; i++) {
@@ -171,7 +163,7 @@ export class SoftBodyPhysics {
             const iz = posArray[i3 + 2];
             
             // Only check a subset to avoid O(n²) complexity
-            const step = Math.max(1, Math.floor(positions.count / PROXIMITY_SAMPLING_STEP_DIVISOR));
+            const step = Math.max(1, Math.floor(positions.count / PHYSICS_CONFIG.PROXIMITY_SAMPLING_STEP_DIVISOR));
             for (let j = 0; j < positions.count; j += step) {
                 if (i === j) continue;
                 
@@ -247,7 +239,7 @@ export class SoftBodyPhysics {
                 
                 // Clamp velocity to prevent explosion
                 const velLength = this.vertexVelocities[i].length();
-                const maxVelocity = MAX_VELOCITY_CAP;
+                const maxVelocity = PHYSICS_CONFIG.MAX_VELOCITY_CAP;
                 if (velLength > maxVelocity) {
                     this.vertexVelocities[i].multiplyScalar(maxVelocity / velLength);
                 }
@@ -380,7 +372,7 @@ export class SoftBodyPhysics {
                 
                 // Clamp velocity
                 const velLength = this.vertexVelocities[representative].length();
-                const maxVelocity = MAX_VELOCITY_CAP;
+                const maxVelocity = PHYSICS_CONFIG.MAX_VELOCITY_CAP;
                 if (velLength > maxVelocity) {
                     this.vertexVelocities[representative].multiplyScalar(maxVelocity / velLength);
                 }
@@ -427,7 +419,7 @@ export class SoftBodyPhysics {
                 this.vertexVelocities[i].multiplyScalar(this.damping * dampingMultiplier);
                 
                 const velLength = this.vertexVelocities[i].length();
-                const maxVelocity = MAX_VELOCITY_CAP_SINGLE;
+                const maxVelocity = PHYSICS_CONFIG.MAX_VELOCITY_CAP_SINGLE;
                 if (velLength > maxVelocity) {
                     this.vertexVelocities[i].multiplyScalar(maxVelocity / velLength);
                 }
@@ -464,7 +456,7 @@ export class SoftBodyPhysics {
         
         // Only recalculate normals every N frames (huge performance boost!)
         // EXCEPT when lerp is complete (at original position) - then always recalculate for correct final state
-        if (this.frameCount % NORMAL_RECALC_INTERVAL === 0 || lerpAmount >= 1.0) {
+        if (this.frameCount % PHYSICS_CONFIG.NORMAL_RECALC_INTERVAL === 0 || lerpAmount >= 1.0) {
             this.geometry.computeVertexNormals();
         }
     }

@@ -1,14 +1,6 @@
 import { SphereGeometry, MeshStandardMaterial, Mesh, BoxGeometry, CanvasTexture, RepeatWrapping, Vector3, Vector2, Box3, Color } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-
-// Texture generation constants
-const NORMAL_MAP_SIZE = 512;
-const NORMAL_MAP_OCTAVES = 4;
-const NORMAL_MAP_HEIGHT_SCALE = 0.3;
-
-// Model constants
-const TARGET_MODEL_HEIGHT = 3;
-const MODEL_ROTATION_DEGREES = 300;
+import { PEACH_CONFIG } from './config.js';
 
 // Oil effect state
 let peachMeshes = [];
@@ -20,7 +12,7 @@ const originalMaterialProperties = new Map();
  * @returns {THREE.CanvasTexture} Generated normal map texture
  */
 function generatePeachNormalMap() {
-    const size = NORMAL_MAP_SIZE;
+    const size = PEACH_CONFIG.NORMAL_MAP_SIZE;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
@@ -45,7 +37,7 @@ function generatePeachNormalMap() {
         let amplitude = 1;
         let frequency = 1;
         
-        for (let i = 0; i < NORMAL_MAP_OCTAVES; i++) {
+        for (let i = 0; i < PEACH_CONFIG.NORMAL_MAP_OCTAVES; i++) {
             value += amplitude * noise(x * frequency, y * frequency);
             amplitude *= 0.5;
             frequency *= 2;
@@ -59,9 +51,9 @@ function generatePeachNormalMap() {
             const idx = (y * size + x) * 4;
             
             // Sample neighboring pixels for height
-            const h0 = fbm(x / size, y / size) * NORMAL_MAP_HEIGHT_SCALE;
-            const h1 = fbm((x + 1) / size, y / size) * NORMAL_MAP_HEIGHT_SCALE;
-            const h2 = fbm(x / size, (y + 1) / size) * NORMAL_MAP_HEIGHT_SCALE;
+            const h0 = fbm(x / size, y / size) * PEACH_CONFIG.NORMAL_MAP_HEIGHT_SCALE;
+            const h1 = fbm((x + 1) / size, y / size) * PEACH_CONFIG.NORMAL_MAP_HEIGHT_SCALE;
+            const h2 = fbm(x / size, (y + 1) / size) * PEACH_CONFIG.NORMAL_MAP_HEIGHT_SCALE;
             
             // Calculate normal from height differences
             const dx = h1 - h0;
@@ -195,7 +187,7 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             const center = box.getCenter(new Vector3());
             
             // Scale the model to target height
-            const scaleFactor = TARGET_MODEL_HEIGHT / size.y;
+            const scaleFactor = PEACH_CONFIG.TARGET_MODEL_HEIGHT / size.y;
             model.scale.set(scaleFactor, scaleFactor, scaleFactor);
             
             // Recalculate box after scaling
@@ -206,7 +198,7 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
             model.position.sub(center);
             
             // Rotate the peach to face the camera nicely - crease towards user
-            model.rotation.y = (MODEL_ROTATION_DEGREES * Math.PI) / 180;
+            model.rotation.y = (PEACH_CONFIG.MODEL_ROTATION_DEGREES * Math.PI) / 180;
             
             // Store all meshes for raycasting
             const meshes = [];

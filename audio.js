@@ -1,24 +1,7 @@
+import { AUDIO_CONFIG } from './config.js';
+
 // Audio context for sound effects (lazy initialized)
 let audioContext = null;
-
-// Audio configuration
-const AUDIO_CONFIG = {
-    slapSounds: [
-        `${import.meta.env.BASE_URL}assets/ass2.m4a`,
-        `${import.meta.env.BASE_URL}assets/ass3.m4a`,
-        `${import.meta.env.BASE_URL}assets/ass5.m4a`
-    ],
-    explosionSound: `${import.meta.env.BASE_URL}assets/uh.m4a`,
-    pitchVariationMin: 0.85,
-    pitchVariationMax: 1.15,
-    highShelfFrequency: 2000,
-    highShelfGainMin: 3,
-    highShelfGainMax: 6,
-    lowpassFrequencyMin: 8000,
-    lowpassFrequencyMax: 12000,
-    lowpassQ: 0.7,
-    silentOffset: 0.08
-};
 
 // Sound buffers
 const slapSounds = [];

@@ -1,46 +1,5 @@
 import { AmbientLight, TorusGeometry, MeshStandardMaterial, Mesh, PointLight, DirectionalLight } from 'three';
-
-// Configuration for different lighting modes
-const LIGHTING_CONFIG = {
-    // Number of lights
-    NORMAL_MODE_LIGHTS: 6,    // Simplified lighting for normal mode (performance)
-    OILED_MODE_LIGHTS: 24,    // Full quality lighting for oiled mode (quality)
-    
-    // Ring light geometry
-    RING_RADIUS: 3.5,
-    RING_TUBE_RADIUS: 0.15,
-    RING_RADIAL_SEGMENTS: 16,
-    RING_TUBULAR_SEGMENTS: 100,
-    RING_POSITION_Z: 6,
-    
-    // Ring light properties
-    RING_COLOR: 0xffd9a8,
-    RING_EMISSIVE_INTENSITY: 2,
-    RING_LIGHT_DISTANCE: 100,
-    RING_LIGHT_INTENSITY_OILED: 2.5,
-    RING_LIGHT_INTENSITY_NORMAL: 6.0,  // Boosted to compensate for fewer lights
-    
-    // Ambient light
-    AMBIENT_COLOR: 0xffeedd,
-    AMBIENT_INTENSITY: 0.25,
-    
-    // Key light (directional)
-    KEY_LIGHT_COLOR: 0xffffff,
-    KEY_LIGHT_INTENSITY: 1.2,
-    KEY_LIGHT_POSITION: { x: 2, y: 5, z: 8 },
-    
-    // Rim light (back highlight)
-    RIM_LIGHT_COLOR: 0xffe4d6,
-    RIM_LIGHT_INTENSITY: 2.0,
-    RIM_LIGHT_DISTANCE: 100,
-    RIM_LIGHT_POSITION: { x: 0, y: 1, z: -6 },
-    
-    // Bottom fill light
-    BOTTOM_FILL_COLOR: 0xffd9c8,
-    BOTTOM_FILL_INTENSITY: 0.6,
-    BOTTOM_FILL_DISTANCE: 100,
-    BOTTOM_FILL_POSITION: { x: 0, y: -3, z: 4 },
-};
+import { LIGHTING_CONFIG } from './config.js';
 
 /**
  * Setup atmospheric lighting with influencer-style ring light
@@ -164,14 +123,6 @@ export function setupLighting(scene) {
     scene.add(bottomFill);
     otherLights.push(bottomFill);
     
-    // Function to switch between lighting modes
-    // Performance monitor handles both visibility/count AND intensity
-    // This function is now just a placeholder for backwards compatibility
-    const setOiledMode = (isOiled) => {
-        // Do nothing - performance monitor handles everything
-        // This function is called to signal mode change, actual work done by perfMonitor
-    };
-    
-    return { ringLights, otherLights, normalModeLights, oiledModeLights, setOiledMode };
+    return { ringLights, otherLights, normalModeLights, oiledModeLights };
 }
 
