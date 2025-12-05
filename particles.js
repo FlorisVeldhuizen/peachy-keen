@@ -237,6 +237,24 @@ export class ParticleExplosion {
     }
     
     /**
+     * Force finish explosion (used when particles are disabled mid-explosion)
+     */
+    forceFinishExplosion() {
+        if (!this.isExploding) return;
+        
+        // Immediately clear particles
+        this.clearParticles();
+        
+        this.isExploding = false;
+        this.explosionTimer = 0;
+        
+        // Trigger callback to spawn fresh peach
+        if (this.onComplete) {
+            this.onComplete();
+        }
+    }
+    
+    /**
      * Clear all particles from the scene
      */
     clearParticles() {

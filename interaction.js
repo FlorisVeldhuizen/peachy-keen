@@ -456,12 +456,19 @@ export function updatePeachPhysics(delta, idleTime, perfMonitor = null) {
     
     // Update particle explosion if active (check if particles are enabled)
     const particlesEnabled = !perfMonitor || perfMonitor.isFeatureEnabled('particles');
-    if (peachState.particleExplosion && particlesEnabled) {
-        peachState.particleExplosion.update(delta);
-        
-        // Skip normal physics during explosion
-        if (peachState.particleExplosion.isActive()) {
-            return;
+    if (peachState.particleExplosion) {
+        if (particlesEnabled) {
+            peachState.particleExplosion.update(delta);
+            
+            // Skip normal physics during explosion
+            if (peachState.particleExplosion.isActive()) {
+                return;
+            }
+        } else {
+            // If particles are disabled during an active explosion, force-finish it immediately
+            if (peachState.particleExplosion.isActive()) {
+                peachState.particleExplosion.forceFinishExplosion();
+            }
         }
     }
     
