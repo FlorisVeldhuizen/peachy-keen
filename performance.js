@@ -119,6 +119,7 @@ export class PerformanceMonitor {
         const gearButton = document.getElementById('perf-gear-button');
         const toggleBtn = document.getElementById('perf-toggle');
         const content = document.querySelector('.perf-content');
+        const handCursor = document.getElementById('hand-cursor');
         
         // Gear button opens the panel
         gearButton.addEventListener('click', () => {
@@ -127,11 +128,37 @@ export class PerformanceMonitor {
             content.style.display = 'block';
         });
         
+        // Change cursor emoji when hovering over gear button
+        gearButton.addEventListener('mouseenter', () => {
+            if (handCursor) {
+                handCursor.textContent = '👆';
+            }
+        });
+        
+        gearButton.addEventListener('mouseleave', () => {
+            if (handCursor) {
+                handCursor.textContent = '🤚';
+            }
+        });
+        
         // Close button hides the panel and shows gear button
         toggleBtn.addEventListener('click', () => {
             panel.style.display = 'none';
             gearButton.style.display = 'block';
             content.style.display = 'none';
+        });
+        
+        // Change cursor emoji when hovering over close button
+        toggleBtn.addEventListener('mouseenter', () => {
+            if (handCursor) {
+                handCursor.textContent = '👆';
+            }
+        });
+        
+        toggleBtn.addEventListener('mouseleave', () => {
+            if (handCursor) {
+                handCursor.textContent = '🤚';
+            }
         });
         
         // Feature toggles
@@ -155,9 +182,39 @@ export class PerformanceMonitor {
             this.toggleFeature('shadows', e.target.checked);
         });
         
-        // Reset metrics
-        document.getElementById('reset-metrics').addEventListener('click', () => {
+        // Add hover listeners to all toggle labels
+        const toggleLabels = document.querySelectorAll('.toggle-label');
+        toggleLabels.forEach(label => {
+            label.addEventListener('mouseenter', () => {
+                if (handCursor) {
+                    handCursor.textContent = '👆';
+                }
+            });
+            
+            label.addEventListener('mouseleave', () => {
+                if (handCursor) {
+                    handCursor.textContent = '🤚';
+                }
+            });
+        });
+        
+        // Reset metrics button
+        const resetButton = document.getElementById('reset-metrics');
+        resetButton.addEventListener('click', () => {
             this.resetMetrics();
+        });
+        
+        // Change cursor emoji when hovering over reset button
+        resetButton.addEventListener('mouseenter', () => {
+            if (handCursor) {
+                handCursor.textContent = '👆';
+            }
+        });
+        
+        resetButton.addEventListener('mouseleave', () => {
+            if (handCursor) {
+                handCursor.textContent = '🤚';
+            }
         });
     }
     
