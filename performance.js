@@ -16,8 +16,7 @@ export class PerformanceMonitor {
             backgroundShader: true,
             ringLights: true,
             softBodyPhysics: true,
-            particles: true,
-            shadows: true
+            particles: true
         };
         
         // Performance metrics
@@ -30,6 +29,8 @@ export class PerformanceMonitor {
         
         // References to scene objects (set externally)
         this.backgroundMesh = null;
+        this.animatedBackgroundMaterial = null;
+        this.gradientBackgroundMaterial = null;
         this.ringLights = [];
         this.renderer = null;
         this.scene = null;
@@ -105,10 +106,6 @@ export class PerformanceMonitor {
                         <input type="checkbox" id="toggle-particles" checked>
                         <span>Particles</span>
                     </label>
-                    <label class="toggle-label interactive-element">
-                        <input type="checkbox" id="toggle-shadows" checked>
-                        <span>Shadow Rendering</span>
-                    </label>
                 </div>
                 
                 <div class="perf-actions">
@@ -163,10 +160,6 @@ export class PerformanceMonitor {
             this.toggleFeature('particles', e.target.checked);
         });
         
-        document.getElementById('toggle-shadows').addEventListener('change', (e) => {
-            this.toggleFeature('shadows', e.target.checked);
-        });
-        
         // Reset metrics button
         document.getElementById('reset-metrics').addEventListener('click', () => {
             this.resetMetrics();
@@ -187,9 +180,14 @@ export class PerformanceMonitor {
         switch(feature) {
             case 'backgroundShader':
                 if (this.backgroundMesh) {
-                    this.backgroundMesh.visible = enabled;
+                    // Switch between animated and gradient background
+                    if (enabled && this.animatedBackgroundMaterial) {
+                        this.backgroundMesh.material = this.animatedBackgroundMaterial;
+                    } else if (!enabled && this.gradientBackgroundMaterial) {
+                        this.backgroundMesh.material = this.gradientBackgroundMaterial;
+                    }
                 }
-                console.log(`Background Shader: ${enabled ? 'ON' : 'OFF'}`);
+                console.log(`Background Shader: ${enabled ? 'Animated' : 'Gradient'}`);
                 break;
                 
             case 'ringLights':
@@ -207,13 +205,6 @@ export class PerformanceMonitor {
             case 'particles':
                 // This will be checked in the particle update loop
                 console.log(`Particles: ${enabled ? 'ON' : 'OFF'}`);
-                break;
-                
-            case 'shadows':
-                if (this.renderer) {
-                    this.renderer.shadowMap.enabled = enabled;
-                }
-                console.log(`Shadows: ${enabled ? 'ON' : 'OFF'}`);
                 break;
         }
     }
@@ -306,6 +297,14 @@ export class PerformanceMonitor {
      */
     setBackgroundMesh(mesh) {
         this.backgroundMesh = mesh;
+    }
+    
+    /**
+     * Set references to both background materials
+     */
+    setBackgroundMaterials(animatedMaterial, gradientMaterial) {
+        this.animatedBackgroundMaterial = animatedMaterial;
+        this.gradientBackgroundMaterial = gradientMaterial;
     }
     
     /**

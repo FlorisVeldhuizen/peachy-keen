@@ -1,6 +1,52 @@
 import { ShaderMaterial, Vector2 } from 'three';
 
 /**
+ * Create a simple gradient background material (fallback when shader is disabled)
+ * @returns {THREE.ShaderMaterial} The gradient background material
+ */
+export function createGradientBackgroundMaterial() {
+    return new ShaderMaterial({
+        uniforms: {
+            resolution: { value: new Vector2(window.innerWidth, window.innerHeight) }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position.xy, 0.0, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform vec2 resolution;
+            varying vec2 vUv;
+            
+            void main() {
+                vec2 uv = vUv;
+                
+                // Calculate distance from center for radial gradient
+                vec2 center = vec2(0.5, 0.5);
+                float distFromCenter = length(uv - center);
+                
+                // Define gradient colors: pink to violet
+                vec3 colorTop = vec3(0.42, 0.25, 0.45);     // Violet (#6B4073)
+                vec3 colorBottom = vec3(0.50, 0.30, 0.45);  // Pink-violet (#7F4D73)
+                
+                // Vertical gradient from top to bottom
+                vec3 gradientColor = mix(colorTop, colorBottom, uv.y);
+                
+                // Add subtle radial variation for depth
+                float radialInfluence = smoothstep(0.0, 1.0, distFromCenter) * 0.15;
+                gradientColor -= radialInfluence;
+                
+                gl_FragColor = vec4(gradientColor, 1.0);
+            }
+        `,
+        depthTest: false,
+        depthWrite: false
+    });
+}
+
+/**
  * Create the animated background shader material
  * @returns {THREE.ShaderMaterial} The background shader material
  */

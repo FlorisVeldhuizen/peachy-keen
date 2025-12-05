@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera, WebGLRenderer, PCFSoftShadowMap, ACESFilmicToneMapping } from 'three';
+import { Scene, PerspectiveCamera, WebGLRenderer, PCFSoftShadowMap, ACESFilmicToneMapping, Color } from 'three';
 
 /**
  * Initialize the Three.js scene, camera, and renderer
@@ -6,8 +6,12 @@ import { Scene, PerspectiveCamera, WebGLRenderer, PCFSoftShadowMap, ACESFilmicTo
  */
 export function initScene() {
     const scene = new Scene();
+    
+    // No solid background color needed - we use shader materials for the background
+    scene.background = null;
+    
     const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new WebGLRenderer({ antialias: true });
+    const renderer = new WebGLRenderer({ antialias: true, alpha: true });
 
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -28,10 +32,11 @@ export function initScene() {
  * Setup window resize handler to keep canvas responsive
  * @param {THREE.Camera} camera - The camera
  * @param {THREE.Renderer} renderer - The renderer
- * @param {THREE.ShaderMaterial} backgroundMaterial - The background shader material
+ * @param {THREE.ShaderMaterial} animatedBackgroundMaterial - The animated background shader material
+ * @param {THREE.ShaderMaterial} gradientBackgroundMaterial - The gradient background shader material
  */
-export function setupResizeHandler(camera, renderer, backgroundMaterial) {
-    if (!camera || !renderer || !backgroundMaterial) {
+export function setupResizeHandler(camera, renderer, animatedBackgroundMaterial, gradientBackgroundMaterial) {
+    if (!camera || !renderer || !animatedBackgroundMaterial || !gradientBackgroundMaterial) {
         console.error('setupResizeHandler: Missing required parameters');
         return;
     }
@@ -40,7 +45,8 @@ export function setupResizeHandler(camera, renderer, backgroundMaterial) {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-        backgroundMaterial.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+        animatedBackgroundMaterial.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+        gradientBackgroundMaterial.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
     });
 }
 

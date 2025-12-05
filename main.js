@@ -1,5 +1,5 @@
 import { Group, PlaneGeometry, Mesh, Clock } from 'three';
-import { createBackgroundMaterial } from './shaders.js';
+import { createBackgroundMaterial, createGradientBackgroundMaterial } from './shaders.js';
 import { loadPeachModel } from './peach.js';
 import { setupLighting } from './lighting.js';
 import { initInteraction, setPeachMesh, updatePeachPhysics } from './interaction.js';
@@ -80,14 +80,18 @@ perfMonitor.setScene(scene);
 
 updateLoadingProgress(20, 'Creating background...');
 
-// Create and add background
-const backgroundMaterial = createBackgroundMaterial();
+// Create both background materials
+const animatedBackgroundMaterial = createBackgroundMaterial();
+const gradientBackgroundMaterial = createGradientBackgroundMaterial();
 const backgroundGeometry = new PlaneGeometry(2, 2);
-const background = new Mesh(backgroundGeometry, backgroundMaterial);
+
+// Start with the animated background
+const background = new Mesh(backgroundGeometry, animatedBackgroundMaterial);
 scene.add(background);
 
 // Set reference for performance monitoring
 perfMonitor.setBackgroundMesh(background);
+perfMonitor.setBackgroundMaterials(animatedBackgroundMaterial, gradientBackgroundMaterial);
 
 // Create the peach group
 const peachGroup = new Group();
@@ -120,7 +124,7 @@ initInteraction(peachGroup, camera, scene);
 
 // Setup window resize handler
 updateLoadingProgress(70, 'Finalizing...');
-setupResizeHandler(camera, renderer, backgroundMaterial);
+setupResizeHandler(camera, renderer, animatedBackgroundMaterial, gradientBackgroundMaterial);
 
 // Animation loop with clock for accurate timing
 const clock = new Clock();
@@ -138,7 +142,7 @@ function animate() {
     
     // Update background shader (only if enabled)
     if (perfMonitor.isFeatureEnabled('backgroundShader')) {
-        backgroundMaterial.uniforms.time.value += delta;
+        animatedBackgroundMaterial.uniforms.time.value += delta;
     }
     
     // Update peach physics and animation
