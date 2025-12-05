@@ -1,4 +1,4 @@
-import { Group, PlaneGeometry, Mesh } from 'three';
+import { Group, PlaneGeometry, Mesh, Clock } from 'three';
 import { createBackgroundMaterial } from './shaders.js';
 import { loadPeachModel } from './peach.js';
 import { setupLighting } from './lighting.js';
@@ -121,6 +121,9 @@ initInteraction(peachGroup, camera, scene);
 updateLoadingProgress(70, 'Finalizing...');
 setupResizeHandler(camera, renderer, backgroundMaterial);
 
+// Animation loop with clock for accurate timing
+const clock = new Clock();
+
 // Idle floating animation timer
 let idleTime = 0;
 
@@ -128,7 +131,8 @@ let idleTime = 0;
 function animate() {
     requestAnimationFrame(animate);
     
-    const delta = 0.016; // ~60fps
+    // Use clock for accurate delta time (capped to avoid large jumps)
+    const delta = Math.min(clock.getDelta(), 0.1);
     idleTime += delta;
     
     // Update background shader (only if enabled)
