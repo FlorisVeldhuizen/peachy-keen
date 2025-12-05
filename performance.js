@@ -36,12 +36,21 @@ export class PerformanceMonitor {
         this.scene = null;
         
         // Ring light configuration
-        this.ringLightCount = 6; // Start in normal mode (6 lights)
+        this.ringLightCount = 6; // Current light count
         this.ringLightMesh = null; // The physical torus mesh
         this.ringPointLights = []; // Just the point lights (not the mesh)
         this.isOiledMode = false; // Track current lighting mode
         this.maxLightsNormalMode = 6;  // Match LIGHTING_CONFIG.NORMAL_MODE_LIGHTS
         this.maxLightsOiledMode = 24;  // Match LIGHTING_CONFIG.OILED_MODE_LIGHTS
+        this.lightingModeCallback = null; // Reference to setOiledMode function from lighting.js
+        
+        // Track light counts independently per mode
+        this.normalModeLightCount = 6;  // Default for normal mode
+        this.oiledModeLightCount = 24;  // Default for oiled mode
+        
+        // Track intensities independently per mode
+        this.normalModeIntensity = 6.0; // Default LIGHTING_CONFIG.RING_LIGHT_INTENSITY_NORMAL
+        this.oiledModeIntensity = 2.5;  // Default LIGHTING_CONFIG.RING_LIGHT_INTENSITY_OILED
         
         this.createUI();
     }
@@ -99,6 +108,12 @@ export class PerformanceMonitor {
                         <label class="slider-label interactive-element">
                             <span>Light Count: <span id="light-count-value">6</span> <span id="light-mode-indicator">(Normal Mode)</span></span>
                             <input type="range" id="light-count-slider" min="0" max="6" value="6" step="1" class="interactive-element">
+                        </label>
+                    </div>
+                    <div class="slider-control">
+                        <label class="slider-label interactive-element">
+                            <span>Light Intensity: <span id="light-intensity-value">8.0</span></span>
+                            <input type="range" id="light-intensity-slider" min="0" max="15" value="8.0" step="0.1" class="interactive-element">
                         </label>
                     </div>
                     <label class="toggle-label interactive-element">
@@ -172,6 +187,11 @@ export class PerformanceMonitor {
         document.getElementById('light-count-slider').addEventListener('input', (e) => {
             this.adjustLightCount(parseInt(e.target.value));
         });
+        
+        // Light intensity slider
+        document.getElementById('light-intensity-slider').addEventListener('input', (e) => {
+            this.adjustLightIntensity(parseFloat(e.target.value));
+        });
     }
     
     /**
@@ -198,10 +218,14 @@ export class PerformanceMonitor {
                     light.visible = enabled;
                 });
                 
-                // Enable/disable the slider based on ring lights state
-                const slider = document.getElementById('light-count-slider');
-                if (slider) {
-                    slider.disabled = !enabled;
+                // Enable/disable the sliders based on ring lights state
+                const countSlider = document.getElementById('light-count-slider');
+                const intensitySlider = document.getElementById('light-intensity-slider');
+                if (countSlider) {
+                    countSlider.disabled = !enabled;
+                }
+                if (intensitySlider) {
+                    intensitySlider.disabled = !enabled;
                 }
                 
                 console.log(`Ring Lights: ${enabled ? 'ON' : 'OFF'}`);
@@ -319,9 +343,13 @@ export class PerformanceMonitor {
     
     /**
      * Set references to ring lights
+     * @param {Array} lights - Array containing mesh and point lights
+     * @param {Function} modeCallback - Optional callback for switching lighting modes
      */
-    setRingLights(lights) {
+    setRingLights(lights, modeCallback = null) {
         this.ringLights = lights;
+        this.lightingModeCallback = modeCallback;
+        
         // Separate the mesh from the point lights
         // First element is the torus mesh, rest are point lights
         if (lights.length > 0) {
@@ -347,11 +375,19 @@ export class PerformanceMonitor {
     
     /**
      * Adjust the number of ring lights
+     * @returns {Promise} Resolves when adjustment is complete
      */
     adjustLightCount(newCount) {
         if (!this.scene) {
             console.warn('Scene not set, cannot adjust lights');
-            return;
+            return Promise.resolve();
+        }
+        
+        // Validate against current mode's maximum
+        const maxAllowed = this.isOiledMode ? this.maxLightsOiledMode : this.maxLightsNormalMode;
+        if (newCount > maxAllowed) {
+            console.warn(`⚠️ Cannot have ${newCount} lights in ${this.isOiledMode ? 'Oiled' : 'Normal'} mode (max: ${maxAllowed})`);
+            newCount = maxAllowed;
         }
         
         // Update display
@@ -364,16 +400,19 @@ export class PerformanceMonitor {
         const ringRadius = 3.5;
         const zPosition = 6;
         
-        // Import PointLight dynamically
-        import('three').then(({ PointLight }) => {
+        // Get current intensity from mode setting (for new lights only)
+        const intensity = this.isOiledMode ? this.oiledModeIntensity : this.normalModeIntensity;
+        
+        // Import PointLight dynamically and return the promise
+        return import('three').then(({ PointLight }) => {
             if (newCount > currentCount) {
-                // Add more lights
+                // Add more lights with current mode's intensity
                 for (let i = currentCount; i < newCount; i++) {
                     const angle = (i / newCount) * Math.PI * 2;
                     const x = Math.cos(angle) * ringRadius;
                     const y = Math.sin(angle) * ringRadius;
                     
-                    const light = new PointLight(0xffd9a8, 1.5, 100);
+                    const light = new PointLight(0xffd9a8, intensity, 100);
                     light.position.set(x, y, zPosition);
                     this.scene.add(light);
                     this.ringPointLights.push(light);
@@ -396,14 +435,30 @@ export class PerformanceMonitor {
             }
             
             // Redistribute remaining lights evenly around the circle
+            // DON'T update intensity here - let adjustLightIntensity handle that
             for (let i = 0; i < this.ringPointLights.length; i++) {
                 const angle = (i / this.ringPointLights.length) * Math.PI * 2;
                 const x = Math.cos(angle) * ringRadius;
                 const y = Math.sin(angle) * ringRadius;
                 this.ringPointLights[i].position.set(x, y, zPosition);
+                
+                // Set visibility based on newCount
+                this.ringPointLights[i].visible = (i < newCount);
+                
+                // Only set intensity for newly created lights, don't override existing
+                if (i >= currentCount && i < newCount) {
+                    this.ringPointLights[i].intensity = intensity;
+                }
             }
             
             this.ringLightCount = newCount;
+            
+            // Save to the current mode's light count
+            if (this.isOiledMode) {
+                this.oiledModeLightCount = newCount;
+            } else {
+                this.normalModeLightCount = newCount;
+            }
         });
     }
     
@@ -419,34 +474,90 @@ export class PerformanceMonitor {
      * @param {boolean} isOiled - Whether oiled mode is active
      */
     setLightingMode(isOiled) {
-        this.isOiledMode = isOiled;
+        // Save the current mode's light count and intensity before switching
+        const currentVisibleCount = this.ringPointLights.filter(light => light.visible).length;
+        // Get current intensity from first visible light
+        const firstVisibleLight = this.ringPointLights.find(light => light.visible);
+        const currentIntensity = firstVisibleLight ? firstVisibleLight.intensity : 
+            (this.isOiledMode ? this.oiledModeIntensity : this.normalModeIntensity);
         
-        const slider = document.getElementById('light-count-slider');
-        const indicator = document.getElementById('light-mode-indicator');
-        const countDisplay = document.getElementById('light-count-value');
-        
-        if (!slider) return;
-        
-        // Set slider to the actual number of lights for this mode
-        const targetLights = isOiled ? this.maxLightsOiledMode : this.maxLightsNormalMode;
-        
-        // Update slider max
-        slider.max = targetLights;
-        
-        // Update slider value to match the active light count
-        slider.value = targetLights;
-        if (countDisplay) {
-            countDisplay.textContent = targetLights;
+        if (this.isOiledMode) {
+            // Currently in oiled mode, save oiled settings
+            this.oiledModeLightCount = currentVisibleCount;
+            this.oiledModeIntensity = currentIntensity;
+        } else {
+            // Currently in normal mode, save normal settings
+            this.normalModeLightCount = currentVisibleCount;
+            this.normalModeIntensity = currentIntensity;
         }
         
-        // Actually adjust the lights in the scene
-        this.adjustLightCount(targetLights);
+        this.isOiledMode = isOiled;
         
-        // Update mode indicator
+        const countSlider = document.getElementById('light-count-slider');
+        const intensitySlider = document.getElementById('light-intensity-slider');
+        const indicator = document.getElementById('light-mode-indicator');
+        const countDisplay = document.getElementById('light-count-value');
+        const intensityDisplay = document.getElementById('light-intensity-value');
+        
+        if (!countSlider) return;
+        
+        // Get the target mode's saved settings
+        const targetCount = isOiled ? this.oiledModeLightCount : this.normalModeLightCount;
+        const targetIntensity = isOiled ? this.oiledModeIntensity : this.normalModeIntensity;
+        const maxLights = isOiled ? this.maxLightsOiledMode : this.maxLightsNormalMode;
+        
+        // Update count slider UI
+        countSlider.max = maxLights;
+        countSlider.value = targetCount;
+        if (countDisplay) {
+            countDisplay.textContent = targetCount;
+        }
         if (indicator) {
             indicator.textContent = isOiled ? '(Oiled Mode)' : '(Normal Mode)';
         }
         
-        console.log(`🎚️ Light slider updated: ${targetLights} lights (${isOiled ? 'Oiled' : 'Normal'} Mode)`);
+        // Update intensity slider UI
+        if (intensitySlider) {
+            intensitySlider.value = targetIntensity;
+        }
+        if (intensityDisplay) {
+            intensityDisplay.textContent = targetIntensity.toFixed(1);
+        }
+        
+        // Apply the target settings to the scene
+        // Use promise chaining to ensure proper order
+        this.adjustLightCount(targetCount).then(() => {
+            // After count is adjusted, set the intensity
+            this.adjustLightIntensity(targetIntensity);
+            console.log(`🎚️ Switched to ${isOiled ? 'Oiled' : 'Normal'} mode: ${targetCount}/${maxLights} lights @ ${targetIntensity.toFixed(1)} intensity`);
+        });
+    }
+    
+    /**
+     * Adjust the intensity of ring lights
+     * @param {number} newIntensity - New intensity value
+     */
+    adjustLightIntensity(newIntensity) {
+        // Update display
+        const intensityDisplay = document.getElementById('light-intensity-value');
+        if (intensityDisplay) {
+            intensityDisplay.textContent = newIntensity.toFixed(1);
+        }
+        
+        // Apply intensity to all visible lights
+        this.ringPointLights.forEach(light => {
+            if (light.visible) {
+                light.intensity = newIntensity;
+            }
+        });
+        
+        // Save to the current mode's intensity
+        if (this.isOiledMode) {
+            this.oiledModeIntensity = newIntensity;
+        } else {
+            this.normalModeIntensity = newIntensity;
+        }
+        
+        console.log(`💡 Light intensity: ${newIntensity.toFixed(1)} (${this.isOiledMode ? 'Oiled' : 'Normal'} Mode)`);
     }
 }

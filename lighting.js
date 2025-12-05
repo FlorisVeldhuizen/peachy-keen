@@ -17,8 +17,8 @@ const LIGHTING_CONFIG = {
     RING_COLOR: 0xffd9a8,
     RING_EMISSIVE_INTENSITY: 2,
     RING_LIGHT_DISTANCE: 100,
-    RING_LIGHT_INTENSITY_OILED: 1.3,
-    RING_LIGHT_INTENSITY_NORMAL: 4.7,  // Boosted to compensate for fewer lights
+    RING_LIGHT_INTENSITY_OILED: 2.5,
+    RING_LIGHT_INTENSITY_NORMAL: 6.0,  // Boosted to compensate for fewer lights
     
     // Ambient light
     AMBIENT_COLOR: 0xffeedd,
@@ -165,24 +165,11 @@ export function setupLighting(scene) {
     otherLights.push(bottomFill);
     
     // Function to switch between lighting modes
+    // Performance monitor handles both visibility/count AND intensity
+    // This function is now just a placeholder for backwards compatibility
     const setOiledMode = (isOiled) => {
-        if (isOiled) {
-            // Enable all lights at standard intensity
-            oiledModeLights.forEach(light => {
-                light.visible = true;
-                light.intensity = LIGHTING_CONFIG.RING_LIGHT_INTENSITY_OILED;
-            });
-        } else {
-            // Enable only normal mode lights with boosted intensity
-            oiledModeLights.forEach(light => {
-                if (normalModeLights.includes(light)) {
-                    light.visible = true;
-                    light.intensity = LIGHTING_CONFIG.RING_LIGHT_INTENSITY_NORMAL;
-                } else {
-                    light.visible = false;
-                }
-            });
-        }
+        // Do nothing - performance monitor handles everything
+        // This function is called to signal mode change, actual work done by perfMonitor
     };
     
     return { ringLights, otherLights, normalModeLights, oiledModeLights, setOiledMode };

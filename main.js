@@ -101,8 +101,8 @@ scene.add(peachGroup);
 updateLoadingProgress(40, 'Setting up lights...');
 const { ringLights, otherLights, setOiledMode } = setupLighting(scene);
 
-// Set ring lights reference for performance monitoring
-perfMonitor.setRingLights(ringLights);
+// Set ring lights reference for performance monitoring (pass mode callback)
+perfMonitor.setRingLights(ringLights, setOiledMode);
 
 // Store the lighting mode switcher for later use
 let lightingModeSwitcher = setOiledMode;
