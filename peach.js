@@ -3,8 +3,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Texture generation constants
 const NORMAL_MAP_SIZE = 512;
-const NORMAL_MAP_OCTAVES = 3;
-const NORMAL_MAP_HEIGHT_SCALE = 0.15;
+const NORMAL_MAP_OCTAVES = 4;
+const NORMAL_MAP_HEIGHT_SCALE = 0.3;
 
 // Model constants
 const TARGET_MODEL_HEIGHT = 3;
@@ -151,12 +151,12 @@ function createProceduralPeach() {
     const normalMap = generatePeachNormalMap();
     const peachMaterial = new MeshStandardMaterial({
         color: 0xffb347,
-        roughness: 0.8,
+        roughness: 0.7,
         metalness: 0.0,
         emissive: 0xff8c42,
         emissiveIntensity: 0.1,
         normalMap: normalMap,
-        normalScale: new Vector2(1.0, 1.0) // Balanced for smooth fuzz with defined creases
+        normalScale: new Vector2(0.5, 0.5) // Subtle effect
     });
 
     const peachMesh = new Mesh(peachGeometry, peachMaterial);
@@ -222,12 +222,9 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
                     if (child.material) {
                         child.material.flatShading = false;
                         child.material.normalMap = normalMap;
-                        child.material.normalScale = new Vector2(1.0, 1.0); // Balanced for smooth fuzz with defined creases
+                        child.material.normalScale = new Vector2(0.5, 0.5); // Subtle effect
                         // Add peachy pink tint (FFB3BA is a soft peachy pink color)
                         child.material.color = new Color(0xFFB3BA);
-                        // Adjust material properties for better shadow definition
-                        child.material.roughness = 0.8; // Slightly rougher for better shadow reception
-                        child.material.metalness = 0.0; // Non-metallic for natural look
                         child.material.needsUpdate = true;
                     }
                 }
