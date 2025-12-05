@@ -18,7 +18,8 @@ export class PerformanceMonitor {
             backgroundShader: true,
             ringLights: true,
             softBodyPhysics: true,
-            particles: true
+            particles: true,
+            impactMarks: true
         };
         
         // Performance metrics
@@ -126,6 +127,10 @@ export class PerformanceMonitor {
                         <input type="checkbox" id="toggle-particles" checked>
                         <span>Particles</span>
                     </label>
+                    <label class="toggle-label interactive-element">
+                        <input type="checkbox" id="toggle-impact-marks" checked>
+                        <span>Impact Marks</span>
+                    </label>
                 </div>
                 
                 <div class="perf-actions">
@@ -178,6 +183,10 @@ export class PerformanceMonitor {
         
         document.getElementById('toggle-particles').addEventListener('change', (e) => {
             this.toggleFeature('particles', e.target.checked);
+        });
+        
+        document.getElementById('toggle-impact-marks').addEventListener('change', (e) => {
+            this.toggleFeature('impactMarks', e.target.checked);
         });
         
         // Reset metrics button
@@ -241,6 +250,11 @@ export class PerformanceMonitor {
             case 'particles':
                 // This will be checked in the particle update loop
                 console.log(`Particles: ${enabled ? 'ON' : 'OFF'}`);
+                break;
+                
+            case 'impactMarks':
+                // This will be checked when creating impact marks
+                console.log(`Impact Marks: ${enabled ? 'ON' : 'OFF'}`);
                 break;
         }
     }

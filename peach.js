@@ -1,11 +1,40 @@
-import { SphereGeometry, MeshStandardMaterial, Mesh, BoxGeometry, CanvasTexture, RepeatWrapping, Vector3, Vector2, Box3, Color } from 'three';
+import { SphereGeometry, MeshStandardMaterial, Mesh, BoxGeometry, CanvasTexture, RepeatWrapping, Vector3, Vector2, Box3, Color, BufferAttribute } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { PEACH_CONFIG } from './config.js';
+import { PEACH_CONFIG, INTERACTION_CONFIG } from './config.js';
 
 // Oil effect state
 let peachMeshes = [];
 let isOiled = false;
 const originalMaterialProperties = new Map();
+
+/**
+ * Setup vertex colors for impact marks
+ * @param {THREE.Mesh} mesh - The mesh to setup
+ */
+function setupImpactMarkColors(mesh) {
+    if (!mesh || !mesh.geometry) return;
+    
+    const geometry = mesh.geometry;
+    const count = geometry.attributes.position.count;
+    
+    // Add vertex color attribute if it doesn't exist
+    if (!geometry.attributes.color) {
+        const colors = new Float32Array(count * 3);
+        // Initialize to white (no tint)
+        for (let i = 0; i < count; i++) {
+            colors[i * 3] = 1.0;     // R
+            colors[i * 3 + 1] = 1.0; // G
+            colors[i * 3 + 2] = 1.0; // B
+        }
+        geometry.setAttribute('color', new BufferAttribute(colors, 3));
+    }
+    
+    // Enable vertex colors on material
+    if (mesh.material) {
+        mesh.material.vertexColors = true;
+        mesh.material.needsUpdate = true;
+    }
+}
 
 /**
  * Generate a procedural normal map for smooth peach skin texture
@@ -152,6 +181,9 @@ function createProceduralPeach() {
     });
 
     const peachMesh = new Mesh(peachGeometry, peachMaterial);
+    
+    // Setup impact mark vertex colors
+    setupImpactMarkColors(peachMesh);
 
     // Add a leaf on top
     const leafGeometry = new BoxGeometry(0.15, 0.4, 0.05);
@@ -219,6 +251,9 @@ export function loadPeachModel(peachGroup, onMeshesLoaded) {
                         child.material.color = new Color(0xFFB3BA);
                         child.material.needsUpdate = true;
                     }
+                    
+                    // Setup impact mark vertex colors
+                    setupImpactMarkColors(child);
                 }
             });
             
@@ -287,5 +322,84 @@ export function toggleOilEffect() {
  */
 export function isOiledState() {
     return isOiled;
+}
+
+/**
+ * Update impact mark vertex colors based on current impact marks
+ * @param {Array} impactMarks - Array of impact marks from peachState
+ */
+export function updateImpactMarkShaders(impactMarks) {
+    if (!peachMeshes || peachMeshes.length === 0) return;
+    
+    // Update vertex colors for each mesh
+    peachMeshes.forEach(mesh => {
+        if (!mesh || !mesh.geometry || !mesh.geometry.attributes.color) return;
+        
+        const geometry = mesh.geometry;
+        const positions = geometry.attributes.position;
+        const colors = geometry.attributes.color;
+        const posArray = positions.array;
+        const colorArray = colors.array;
+        
+        // Subtle reddish-pink tint for impact marks (more realistic skin flush)
+        const redTint = new Color(0xFF8888); // Soft pinkish-red, not harsh red
+        
+        // Temp vectors for calculations
+        const vertexPos = new Vector3();
+        
+        // Update each vertex color based on proximity to impact marks
+        for (let i = 0; i < positions.count; i++) {
+            const i3 = i * 3;
+            
+            // Get vertex local position (this is in the original, undeformed mesh space)
+            vertexPos.set(posArray[i3], posArray[i3 + 1], posArray[i3 + 2]);
+            
+            // Start with white (no tint - lets material color through naturally)
+            let impactEffect = 0.0;
+            
+            // Check all impact marks
+            if (impactMarks && impactMarks.length > 0) {
+                for (const mark of impactMarks) {
+                    // Find the local position for this specific mesh
+                    if (!mark.localPositions) continue;
+                    
+                    const meshData = mark.localPositions.find(m => m.mesh === mesh);
+                    if (!meshData) continue;
+                    
+                    // Distance from impact point (both in local mesh space)
+                    const dist = vertexPos.distanceTo(meshData.position);
+                    
+                    // Mark size from config
+                    const radius = INTERACTION_CONFIG.IMPACT_MARK_RADIUS * (mark.intensity || 1.0);
+                    let distFade = 1.0 - (dist / radius);
+                    distFade = Math.max(0, Math.min(1, distFade)); // Clamp 0-1
+                    // Cubic falloff for even softer, more natural edge
+                    distFade = distFade * distFade * distFade;
+                    
+                    // Gradual fade over time with smooth easing
+                    let timeFade = 1.0 - (mark.age / mark.maxAge);
+                    timeFade = Math.max(0, Math.min(1, timeFade));
+                    // Ease out for natural fade
+                    timeFade = 1.0 - Math.pow(1.0 - timeFade, 2);
+                    
+                    // Combine fades with strength from config
+                    const markStrength = distFade * timeFade * (mark.intensity || 1.0) * INTERACTION_CONFIG.IMPACT_MARK_STRENGTH;
+                    impactEffect = Math.max(impactEffect, markStrength);
+                }
+            }
+            
+            // Mix white with subtle red tint based on impact effect
+            // White (1,1,1) = no tint, Soft red = subtle flush
+            const finalColor = new Color(1, 1, 1).lerp(redTint, impactEffect);
+            
+            // Set vertex color (this multiplies with material color)
+            colorArray[i3] = finalColor.r;
+            colorArray[i3 + 1] = finalColor.g;
+            colorArray[i3 + 2] = finalColor.b;
+        }
+        
+        // Mark colors as needing update
+        colors.needsUpdate = true;
+    });
 }
 

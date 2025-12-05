@@ -2,7 +2,7 @@ import { Vector3, Euler, Raycaster, Vector2 } from 'three';
 import { playSmackSound, playExplosionSound } from './audio.js';
 import { SoftBodyPhysics } from './softbody.js';
 import { ParticleExplosion } from './particles.js';
-import { toggleOilEffect } from './peach.js';
+import { toggleOilEffect, updateImpactMarkShaders } from './peach.js';
 import { PHYSICS_CONFIG, INTERACTION_CONFIG } from './config.js';
 
 // Physics and interaction state
@@ -22,7 +22,8 @@ export const peachState = {
     isRespawning: false, // Is the peach currently respawning?
     respawnTimer: 0, // Timer for respawn animation
     respawnDuration: INTERACTION_CONFIG.RESPAWN_DURATION,
-    idleAnimationTime: 0 // Separate time counter for idle animation (always running)
+    idleAnimationTime: 0, // Separate time counter for idle animation (always running)
+    impactMarks: [] // Array of impact marks { position: Vector3, age: number, maxAge: number }
 };
 
 // Mouse tracking state
@@ -189,6 +190,9 @@ export function setPeachMesh(meshes) {
             peachState.physicsRotation.set(0, 0, 0);
             peachState.isWobbling = false;
             // Don't reset idleAnimationTime here - let it continue running
+            
+            // Clear impact marks on respawn
+            peachState.impactMarks = [];
             
             // Set initial state for animation (far away and small)
             if (peachGroup) {
@@ -372,6 +376,9 @@ function checkHoverSmack() {
             softBody.applyImpulse(intersectPoint, direction.clone(), jiggleForce);
         });
         
+        // Add impact mark for visual feedback (red skin that fades over time)
+        addImpactMark(intersectPoint.clone(), velocityScale);
+        
         // Sound intensity based on velocity
         const intensity = Math.min(0.4 + velocityMagnitude / 30, 1.0);
         playSmackSound(intensity);
@@ -398,6 +405,68 @@ function checkHoverSmack() {
     } else {
         // Cursor is not hovering - reset hover state
         mouseState.isHoveringPeach = false;
+    }
+}
+
+/**
+ * Add an impact mark at a world position that fades over time
+ * @param {Vector3} worldPosition - The world position of the impact
+ * @param {number} intensity - The intensity of the impact (0-2)
+ */
+function addImpactMark(worldPosition, intensity = 1.0) {
+    if (!peachGroup || !peachMesh) return;
+    
+    // Check if impact marks are enabled via performance monitor
+    if (performanceMonitor && !performanceMonitor.isFeatureEnabled('impactMarks')) {
+        return;
+    }
+    
+    // Convert to local space ONCE at impact time, so it's "baked" onto the surface
+    // This way it follows the mesh through all rotations and transformations
+    const meshArray = Array.isArray(peachMesh) ? peachMesh : [peachMesh];
+    const localPositions = [];
+    
+    // Store local position for each mesh (in case we have multiple meshes in GLTF)
+    meshArray.forEach(mesh => {
+        const localPos = worldPosition.clone();
+        mesh.worldToLocal(localPos);
+        localPositions.push({
+            mesh: mesh,
+            position: localPos
+        });
+    });
+    
+    // Duration based on intensity - more realistic fade times
+    const duration = INTERACTION_CONFIG.IMPACT_MARK_BASE_DURATION + 
+                    (intensity * (INTERACTION_CONFIG.IMPACT_MARK_MAX_DURATION - INTERACTION_CONFIG.IMPACT_MARK_BASE_DURATION));
+    
+    peachState.impactMarks.push({
+        localPositions: localPositions, // Store per-mesh local positions
+        age: 0,
+        maxAge: duration,
+        intensity: Math.min(intensity * INTERACTION_CONFIG.IMPACT_MARK_INTENSITY_SCALE, 1.2) // Reduced intensity for subtlety
+    });
+    
+    // Limit total number of impact marks for performance
+    if (peachState.impactMarks.length > INTERACTION_CONFIG.MAX_IMPACT_MARKS) {
+        peachState.impactMarks.shift(); // Remove oldest
+    }
+}
+
+/**
+ * Update impact marks (age them and remove expired ones)
+ * @param {number} delta - Time delta since last frame
+ */
+function updateImpactMarks(delta) {
+    // Age all impact marks
+    for (let i = peachState.impactMarks.length - 1; i >= 0; i--) {
+        const mark = peachState.impactMarks[i];
+        mark.age += delta;
+        
+        // Remove expired marks
+        if (mark.age >= mark.maxAge) {
+            peachState.impactMarks.splice(i, 1);
+        }
     }
 }
 
@@ -510,6 +579,21 @@ export function updatePeachPhysics(delta, idleTime, perfMonitor = null) {
     if (peachState.rageLevel > 0) {
         peachState.rageLevel = Math.max(0, peachState.rageLevel - peachState.rageDecayRate * delta);
         updateRageMeter();
+    }
+    
+    // Update impact marks (age them and remove expired ones) - only if enabled
+    const impactMarksEnabled = !perfMonitor || perfMonitor.isFeatureEnabled('impactMarks');
+    if (impactMarksEnabled) {
+        updateImpactMarks(delta);
+        
+        // Update shader uniforms with current impact marks
+        updateImpactMarkShaders(peachState.impactMarks);
+    } else {
+        // Clear impact marks if disabled
+        if (peachState.impactMarks.length > 0) {
+            peachState.impactMarks = [];
+            updateImpactMarkShaders([]); // Clear visual marks
+        }
     }
     
     // Update soft body physics (jiggle) - only if enabled

@@ -74,6 +74,13 @@ export const INTERACTION_CONFIG = {
     RAGE_BASE_INCREASE: 4,
     RAGE_VELOCITY_MULTIPLIER: 3,
     RESPAWN_DURATION: 0.9,
+    // Impact marks
+    IMPACT_MARK_RADIUS: 0.32, // Size of impact marks
+    IMPACT_MARK_BASE_DURATION: 3.5, // Base duration in seconds
+    IMPACT_MARK_MAX_DURATION: 6.0, // Max duration for strong hits
+    IMPACT_MARK_INTENSITY_SCALE: 0.6, // Scale intensity for subtlety
+    IMPACT_MARK_STRENGTH: 0.4, // Overall visual strength
+    MAX_IMPACT_MARKS: 8, // Maximum number of simultaneous marks
 };
 
 // ===== PARTICLE CONFIGURATION =====
