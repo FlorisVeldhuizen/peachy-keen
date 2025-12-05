@@ -32,6 +32,12 @@ export class PerformanceMonitor {
         this.backgroundMesh = null;
         this.ringLights = [];
         this.renderer = null;
+        this.scene = null;
+        
+        // Ring light configuration
+        this.ringLightCount = 24;
+        this.ringLightMesh = null; // The physical torus mesh
+        this.ringPointLights = []; // Just the point lights (not the mesh)
         
         this.createUI();
     }
@@ -44,7 +50,7 @@ export class PerformanceMonitor {
         const gearButton = document.createElement('button');
         gearButton.id = 'perf-gear-button';
         gearButton.innerHTML = '⚙️';
-        gearButton.className = 'perf-gear-btn';
+        gearButton.className = 'perf-gear-btn interactive-element';
         document.body.appendChild(gearButton);
         
         const panel = document.createElement('div');
@@ -53,7 +59,7 @@ export class PerformanceMonitor {
         panel.innerHTML = `
             <div class="perf-header">
                 <h3>Performance Monitor</h3>
-                <button id="perf-toggle" class="perf-collapse">×</button>
+                <button id="perf-toggle" class="perf-collapse interactive-element">×</button>
             </div>
             <div class="perf-content">
                 <div class="perf-stats">
@@ -77,30 +83,36 @@ export class PerformanceMonitor {
                 
                 <div class="perf-controls">
                     <h4>Feature Toggles</h4>
-                    <label class="toggle-label">
+                    <label class="toggle-label interactive-element">
                         <input type="checkbox" id="toggle-background" checked>
                         <span>Background Shader</span>
                     </label>
-                    <label class="toggle-label">
+                    <label class="toggle-label interactive-element">
                         <input type="checkbox" id="toggle-lights" checked>
-                        <span>Ring Lights (24)</span>
+                        <span>Ring Lights</span>
                     </label>
-                    <label class="toggle-label">
+                    <div class="slider-control">
+                        <label class="slider-label interactive-element">
+                            <span>Light Count: <span id="light-count-value">24</span></span>
+                            <input type="range" id="light-count-slider" min="0" max="48" value="24" step="1" class="interactive-element">
+                        </label>
+                    </div>
+                    <label class="toggle-label interactive-element">
                         <input type="checkbox" id="toggle-physics" checked>
                         <span>Soft Body Physics</span>
                     </label>
-                    <label class="toggle-label">
+                    <label class="toggle-label interactive-element">
                         <input type="checkbox" id="toggle-particles" checked>
                         <span>Particles</span>
                     </label>
-                    <label class="toggle-label">
+                    <label class="toggle-label interactive-element">
                         <input type="checkbox" id="toggle-shadows" checked>
                         <span>Shadow Rendering</span>
                     </label>
                 </div>
                 
                 <div class="perf-actions">
-                    <button id="reset-metrics" class="perf-button">Reset Metrics</button>
+                    <button id="reset-metrics" class="perf-button interactive-element">Reset Metrics</button>
                 </div>
             </div>
         `;
@@ -119,7 +131,6 @@ export class PerformanceMonitor {
         const gearButton = document.getElementById('perf-gear-button');
         const toggleBtn = document.getElementById('perf-toggle');
         const content = document.querySelector('.perf-content');
-        const handCursor = document.getElementById('hand-cursor');
         
         // Gear button opens the panel
         gearButton.addEventListener('click', () => {
@@ -128,37 +139,11 @@ export class PerformanceMonitor {
             content.style.display = 'block';
         });
         
-        // Change cursor emoji when hovering over gear button
-        gearButton.addEventListener('mouseenter', () => {
-            if (handCursor) {
-                handCursor.textContent = '👆';
-            }
-        });
-        
-        gearButton.addEventListener('mouseleave', () => {
-            if (handCursor) {
-                handCursor.textContent = '🤚';
-            }
-        });
-        
         // Close button hides the panel and shows gear button
         toggleBtn.addEventListener('click', () => {
             panel.style.display = 'none';
             gearButton.style.display = 'block';
             content.style.display = 'none';
-        });
-        
-        // Change cursor emoji when hovering over close button
-        toggleBtn.addEventListener('mouseenter', () => {
-            if (handCursor) {
-                handCursor.textContent = '👆';
-            }
-        });
-        
-        toggleBtn.addEventListener('mouseleave', () => {
-            if (handCursor) {
-                handCursor.textContent = '🤚';
-            }
         });
         
         // Feature toggles
@@ -182,39 +167,14 @@ export class PerformanceMonitor {
             this.toggleFeature('shadows', e.target.checked);
         });
         
-        // Add hover listeners to all toggle labels
-        const toggleLabels = document.querySelectorAll('.toggle-label');
-        toggleLabels.forEach(label => {
-            label.addEventListener('mouseenter', () => {
-                if (handCursor) {
-                    handCursor.textContent = '👆';
-                }
-            });
-            
-            label.addEventListener('mouseleave', () => {
-                if (handCursor) {
-                    handCursor.textContent = '🤚';
-                }
-            });
-        });
-        
         // Reset metrics button
-        const resetButton = document.getElementById('reset-metrics');
-        resetButton.addEventListener('click', () => {
+        document.getElementById('reset-metrics').addEventListener('click', () => {
             this.resetMetrics();
         });
         
-        // Change cursor emoji when hovering over reset button
-        resetButton.addEventListener('mouseenter', () => {
-            if (handCursor) {
-                handCursor.textContent = '👆';
-            }
-        });
-        
-        resetButton.addEventListener('mouseleave', () => {
-            if (handCursor) {
-                handCursor.textContent = '🤚';
-            }
+        // Light count slider
+        document.getElementById('light-count-slider').addEventListener('input', (e) => {
+            this.adjustLightCount(parseInt(e.target.value));
         });
     }
     
@@ -353,6 +313,13 @@ export class PerformanceMonitor {
      */
     setRingLights(lights) {
         this.ringLights = lights;
+        // Separate the mesh from the point lights
+        // First element is the torus mesh, rest are point lights
+        if (lights.length > 0) {
+            this.ringLightMesh = lights[0]; // The torus mesh
+            this.ringPointLights = lights.slice(1); // All the point lights
+            this.ringLightCount = this.ringPointLights.length;
+        }
     }
     
     /**
@@ -360,6 +327,75 @@ export class PerformanceMonitor {
      */
     setRenderer(renderer) {
         this.renderer = renderer;
+    }
+    
+    /**
+     * Set reference to scene
+     */
+    setScene(scene) {
+        this.scene = scene;
+    }
+    
+    /**
+     * Adjust the number of ring lights
+     */
+    adjustLightCount(newCount) {
+        if (!this.scene) {
+            console.warn('Scene not set, cannot adjust lights');
+            return;
+        }
+        
+        // Update display
+        const countDisplay = document.getElementById('light-count-value');
+        if (countDisplay) {
+            countDisplay.textContent = newCount;
+        }
+        
+        const currentCount = this.ringPointLights.length;
+        const ringRadius = 3.5;
+        const zPosition = 6;
+        
+        // Import PointLight dynamically
+        import('three').then(({ PointLight }) => {
+            if (newCount > currentCount) {
+                // Add more lights
+                for (let i = currentCount; i < newCount; i++) {
+                    const angle = (i / newCount) * Math.PI * 2;
+                    const x = Math.cos(angle) * ringRadius;
+                    const y = Math.sin(angle) * ringRadius;
+                    
+                    const light = new PointLight(0xffd9a8, 1.5, 100);
+                    light.position.set(x, y, zPosition);
+                    this.scene.add(light);
+                    this.ringPointLights.push(light);
+                    this.ringLights.push(light);
+                }
+            } else if (newCount < currentCount) {
+                // Remove lights
+                const lightsToRemove = currentCount - newCount;
+                for (let i = 0; i < lightsToRemove; i++) {
+                    const light = this.ringPointLights.pop();
+                    if (light) {
+                        this.scene.remove(light);
+                        // Remove from ringLights array too
+                        const index = this.ringLights.indexOf(light);
+                        if (index > -1) {
+                            this.ringLights.splice(index, 1);
+                        }
+                    }
+                }
+            }
+            
+            // Redistribute remaining lights evenly around the circle
+            for (let i = 0; i < this.ringPointLights.length; i++) {
+                const angle = (i / this.ringPointLights.length) * Math.PI * 2;
+                const x = Math.cos(angle) * ringRadius;
+                const y = Math.sin(angle) * ringRadius;
+                this.ringPointLights[i].position.set(x, y, zPosition);
+            }
+            
+            this.ringLightCount = newCount;
+        });
     }
     
     /**

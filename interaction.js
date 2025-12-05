@@ -106,19 +106,37 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef) {
             }
         });
         
-        // Change cursor emoji when hovering over button
-        oilButton.addEventListener('mouseenter', () => {
-            if (handCursor) {
-                handCursor.textContent = '👆';
-            }
-        });
-        
-        oilButton.addEventListener('mouseleave', () => {
-            if (handCursor) {
-                handCursor.textContent = '🤚';
-            }
-        });
+        // Add interactive class for cursor handling
+        oilButton.classList.add('interactive-element');
     }
+    
+    // Universal cursor handler using event delegation
+    setupCursorHandling(handCursor);
+}
+
+/**
+ * Setup universal cursor handling using event delegation
+ * @param {HTMLElement} handCursor - The hand cursor element
+ */
+function setupCursorHandling(handCursor) {
+    if (!handCursor) return;
+    
+    // Use event delegation on document body
+    document.body.addEventListener('mouseover', (e) => {
+        // Check if the target or any parent has the interactive class
+        const interactiveElement = e.target.closest('.interactive-element');
+        if (interactiveElement) {
+            handCursor.textContent = '👆';
+        }
+    });
+    
+    document.body.addEventListener('mouseout', (e) => {
+        // Check if we're leaving an interactive element
+        const interactiveElement = e.target.closest('.interactive-element');
+        if (interactiveElement && !interactiveElement.contains(e.relatedTarget)) {
+            handCursor.textContent = '🤚';
+        }
+    });
 }
 
 /**

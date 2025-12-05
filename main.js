@@ -76,6 +76,7 @@ const { scene, camera, renderer } = initScene();
 // Initialize performance monitor
 const perfMonitor = new PerformanceMonitor();
 perfMonitor.setRenderer(renderer);
+perfMonitor.setScene(scene);
 
 updateLoadingProgress(20, 'Creating background...');
 

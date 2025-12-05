@@ -422,6 +422,64 @@ body {
     color: rgba(255, 255, 255, 0.9);
 }
 
+.slider-control {
+    margin: 10px 0 10px 24px;
+}
+
+.slider-label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    cursor: none;
+}
+
+.slider-label span {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+}
+
+.slider-label input[type="range"] {
+    width: 100%;
+    cursor: none;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    outline: none;
+}
+
+.slider-label input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #4CAF50;
+    border-radius: 50%;
+    cursor: none;
+    transition: all 0.2s ease;
+}
+
+.slider-label input[type="range"]::-webkit-slider-thumb:hover {
+    background: #66BB6A;
+    transform: scale(1.2);
+}
+
+.slider-label input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #4CAF50;
+    border: none;
+    border-radius: 50%;
+    cursor: none;
+    transition: all 0.2s ease;
+}
+
+.slider-label input[type="range"]::-moz-range-thumb:hover {
+    background: #66BB6A;
+    transform: scale(1.2);
+}
+
 .perf-actions {
     padding-top: 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
