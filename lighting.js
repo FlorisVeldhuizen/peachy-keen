@@ -14,8 +14,8 @@ export function setupLighting(scene) {
     const ringLights = [];
     const otherLights = [];
     
-    // Soft ambient base
-    const ambientLight = new AmbientLight(0xffeedd, 0.4);
+    // Reduced ambient base for stronger shadows
+    const ambientLight = new AmbientLight(0xffeedd, 0.25);
     scene.add(ambientLight);
     otherLights.push(ambientLight);
 
@@ -43,15 +43,15 @@ export function setupLighting(scene) {
         const x = Math.cos(angle) * ringRadius;
         const y = Math.sin(angle) * ringRadius;
         
-        const light = new PointLight(0xffd9a8, 1.5, 100);
+        const light = new PointLight(0xffd9a8, 1.3, 100);
         light.position.set(x, y, 6);
         scene.add(light);
         ringLights.push(light);
     }
 
-    // Soft key light from above for gentle definition
-    const keyLight = new DirectionalLight(0xffffff, 0.8);
-    keyLight.position.set(0, 5, 8);
+    // Stronger key light from above for defined shadows
+    const keyLight = new DirectionalLight(0xffffff, 1.2);
+    keyLight.position.set(2, 5, 8); // Slightly offset for better shadow angles
     scene.add(keyLight);
     otherLights.push(keyLight);
 
