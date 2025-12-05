@@ -59,6 +59,7 @@ let peachGroup = null;
 let camera = null;
 let handCursor = null;
 let lightingModeSwitcher = null;
+let performanceMonitor = null;
 
 /**
  * Initialize the interaction system
@@ -66,8 +67,9 @@ let lightingModeSwitcher = null;
  * @param {THREE.Camera} cameraRef - The camera
  * @param {THREE.Scene} sceneRef - The scene
  * @param {Function} setLightingMode - Function to switch between normal and oiled lighting modes
+ * @param {PerformanceMonitor} perfMonitor - Optional performance monitor to notify of mode changes
  */
-export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingMode = null) {
+export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingMode = null, perfMonitor = null) {
     if (!peachGroupRef || !cameraRef) {
         console.error('initInteraction: Missing required parameters');
         return;
@@ -77,6 +79,7 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingM
     camera = cameraRef;
     handCursor = document.getElementById('hand-cursor');
     lightingModeSwitcher = setLightingMode;
+    performanceMonitor = perfMonitor;
     
     if (!handCursor) {
         console.warn('Hand cursor element not found');
@@ -105,6 +108,11 @@ export function initInteraction(peachGroupRef, cameraRef, sceneRef, setLightingM
             if (lightingModeSwitcher) {
                 lightingModeSwitcher(isOiled);
                 console.log(`🔆 Lighting mode: ${isOiled ? 'Full quality (oiled)' : 'Performance (normal)'}`);
+            }
+            
+            // Update performance monitor slider to match mode
+            if (performanceMonitor) {
+                performanceMonitor.setLightingMode(isOiled);
             }
             
             if (isOiled) {

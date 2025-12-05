@@ -36,9 +36,12 @@ export class PerformanceMonitor {
         this.scene = null;
         
         // Ring light configuration
-        this.ringLightCount = 24;
+        this.ringLightCount = 6; // Start in normal mode (6 lights)
         this.ringLightMesh = null; // The physical torus mesh
         this.ringPointLights = []; // Just the point lights (not the mesh)
+        this.isOiledMode = false; // Track current lighting mode
+        this.maxLightsNormalMode = 6;  // Match LIGHTING_CONFIG.NORMAL_MODE_LIGHTS
+        this.maxLightsOiledMode = 24;  // Match LIGHTING_CONFIG.OILED_MODE_LIGHTS
         
         this.createUI();
     }
@@ -94,8 +97,8 @@ export class PerformanceMonitor {
                     </label>
                     <div class="slider-control">
                         <label class="slider-label interactive-element">
-                            <span>Light Count: <span id="light-count-value">24</span></span>
-                            <input type="range" id="light-count-slider" min="0" max="48" value="24" step="1" class="interactive-element">
+                            <span>Light Count: <span id="light-count-value">6</span> <span id="light-mode-indicator">(Normal Mode)</span></span>
+                            <input type="range" id="light-count-slider" min="0" max="6" value="6" step="1" class="interactive-element">
                         </label>
                     </div>
                     <label class="toggle-label interactive-element">
@@ -402,5 +405,41 @@ export class PerformanceMonitor {
      */
     isFeatureEnabled(feature) {
         return this.features[feature];
+    }
+    
+    /**
+     * Update lighting mode and adjust slider range accordingly
+     * @param {boolean} isOiled - Whether oiled mode is active
+     */
+    setLightingMode(isOiled) {
+        this.isOiledMode = isOiled;
+        
+        const slider = document.getElementById('light-count-slider');
+        const indicator = document.getElementById('light-mode-indicator');
+        const countDisplay = document.getElementById('light-count-value');
+        
+        if (!slider) return;
+        
+        // Set slider to the actual number of lights for this mode
+        const targetLights = isOiled ? this.maxLightsOiledMode : this.maxLightsNormalMode;
+        
+        // Update slider max
+        slider.max = targetLights;
+        
+        // Update slider value to match the active light count
+        slider.value = targetLights;
+        if (countDisplay) {
+            countDisplay.textContent = targetLights;
+        }
+        
+        // Actually adjust the lights in the scene
+        this.adjustLightCount(targetLights);
+        
+        // Update mode indicator
+        if (indicator) {
+            indicator.textContent = isOiled ? '(Oiled Mode)' : '(Normal Mode)';
+        }
+        
+        console.log(`🎚️ Light slider updated: ${targetLights} lights (${isOiled ? 'Oiled' : 'Normal'} Mode)`);
     }
 }

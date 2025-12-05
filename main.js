@@ -123,7 +123,7 @@ loadPeachModel(peachGroup, (meshes) => {
 
 // Initialize interaction system
 updateLoadingProgress(60, 'Setting up interactions...');
-initInteraction(peachGroup, camera, scene, lightingModeSwitcher);
+initInteraction(peachGroup, camera, scene, lightingModeSwitcher, perfMonitor);
 
 // Setup window resize handler
 updateLoadingProgress(70, 'Finalizing...');
