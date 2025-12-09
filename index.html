@@ -9,7 +9,7 @@
 </head>
 <body>
     <div class="instructions">
-        🍑 Swipe over the peach to smack it! 🍑
+        🍑 Swipe over the peach to smack it! Or use hand tracking! 🍑
     </div>
     
     <div id="rage-meter-container">
@@ -18,8 +18,15 @@
     </div>
     
     <div id="hand-cursor">🤚</div>
-    
+
     <button id="oil-button">💧 Oil Up</button>
+    <button id="hand-tracking-button">👋 Enable Hand Tracking</button>
+    <button id="visualization-button" style="display: none;">👁️ Toggle Debug View</button>
+
+    <!-- Hand Tracking Status -->
+    <div id="hand-tracking-status" style="display: none;">
+        <div id="hand-status-text">No hands detected</div>
+    </div>
     
     <!-- Sound Enable Overlay -->
     <div id="sound-overlay">

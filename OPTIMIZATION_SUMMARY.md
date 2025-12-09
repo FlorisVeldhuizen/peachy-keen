@@ -122,3 +122,5 @@ This document summarizes the optimization work performed to make the project lea
 - Review config.js periodically to ensure it stays organized
 - Consider splitting config.js if it grows too large (e.g., `config/lighting.js`, `config/physics.js`)
 
+
+

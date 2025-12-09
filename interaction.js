@@ -207,15 +207,17 @@ export function setPeachMesh(meshes) {
 // Track mouse movement for velocity calculation
 function onMouseMove(event) {
     updatePointerPosition(event.clientX, event.clientY);
-    
-    // Update hand cursor position (only for mouse, not touch)
-    if (handCursor) {
+
+    // Update hand cursor position (only for mouse, not touch, and not when hand tracking is active)
+    if (handCursor && !window.isHandTrackingActive) {
         handCursor.style.left = event.clientX + 'px';
         handCursor.style.top = event.clientY + 'px';
     }
-    
-    // Check for hover and smack
-    checkHoverSmack();
+
+    // Check for hover and smack (skip if hand tracking is active)
+    if (!window.isHandTrackingActive) {
+        checkHoverSmack();
+    }
 }
 
 // Touch event handlers for mobile devices
@@ -405,6 +407,110 @@ function checkHoverSmack() {
     } else {
         // Cursor is not hovering - reset hover state
         mouseState.isHoveringPeach = false;
+    }
+}
+
+/**
+ * Process hand tracking slap at specific screen coordinates
+ * @param {number} screenX - Screen X coordinate
+ * @param {number} screenY - Screen Y coordinate
+ * @param {number} velocityX - X velocity in screen pixels
+ * @param {number} velocityY - Y velocity in screen pixels
+ * @param {number} peakVelocity - Peak velocity magnitude (0-1 normalized)
+ */
+export function processHandSlap(screenX, screenY, velocityX, velocityY, peakVelocity) {
+    console.log(`🖐️ processHandSlap called at (${screenX.toFixed(0)}, ${screenY.toFixed(0)})`);
+
+    // Only process if the model is loaded
+    if (!peachMesh || !peachGroup || !camera) {
+        console.warn('processHandSlap: Model not loaded yet');
+        return;
+    }
+
+    // Can't slap during explosion or respawn!
+    if (peachState.isRespawning) return;
+    if (peachState.particleExplosion && peachState.particleExplosion.isActive()) return;
+
+    // Convert screen coordinates to normalized device coordinates
+    const normalizedX = (screenX / window.innerWidth) * 2 - 1;
+    const normalizedY = -(screenY / window.innerHeight) * 2 + 1;
+
+    // Use raycaster to check if hand is over the peach
+    const tempMouse = new Vector2(normalizedX, normalizedY);
+    raycaster.setFromCamera(tempMouse, camera);
+
+    const meshesToCheck = Array.isArray(peachMesh) ? peachMesh : [peachMesh];
+    const intersects = raycaster.intersectObjects(meshesToCheck, true);
+
+    if (intersects.length === 0) {
+        console.log('❌ Hand not over peach, no hit detected');
+        return; // Hand not over peach
+    }
+
+    console.log('✅ PEACH HIT! Applying physics...');
+
+    // Calculate velocity magnitude from screen velocity
+    const velocityMagnitude = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+
+    // Add hand cursor slap animation
+    if (handCursor) {
+        handCursor.classList.remove('smacking');
+        void handCursor.offsetWidth; // Trigger reflow
+        handCursor.classList.add('smacking');
+        setTimeout(() => handCursor.classList.remove('smacking'), 200);
+    }
+
+    // Convert 2D screen velocity to 3D world direction
+    const velocityDir = new Vector2(velocityX, velocityY).normalize();
+
+    const direction = new Vector3(
+        velocityDir.x,
+        -velocityDir.y,
+        0.4
+    ).normalize();
+
+    // Scale force based on velocity (use peak velocity for more dramatic effect)
+    const velocityScale = Math.min(peakVelocity * 100, 3.0); // Hand slaps can be more powerful!
+    const force = 2.0 * velocityScale; // Stronger base force for hand slaps
+    peachState.velocity.add(direction.multiplyScalar(force));
+
+    // Add angular velocity
+    peachState.angularVelocity.set(
+        (Math.random() - 0.5) * 5 * velocityScale,
+        (Math.random() - 0.5) * 5 * velocityScale,
+        (Math.random() - 0.5) * 5 * velocityScale
+    );
+
+    peachState.isWobbling = true;
+
+    // Apply soft body impulse
+    const intersectPoint = intersects[0].point;
+    const jiggleForce = 0.22 * velocityScale;
+    peachState.softBodies.forEach(softBody => {
+        softBody.applyImpulse(intersectPoint, direction.clone(), jiggleForce);
+    });
+
+    // Add impact mark
+    addImpactMark(intersectPoint.clone(), velocityScale);
+
+    // Sound intensity based on velocity
+    const intensity = Math.min(0.5 + peakVelocity, 1.0);
+    playSmackSound(intensity);
+
+    // Increase rage level
+    const rageIncrease = INTERACTION_CONFIG.RAGE_BASE_INCREASE + (velocityScale * INTERACTION_CONFIG.RAGE_VELOCITY_MULTIPLIER * 1.2);
+    peachState.rageLevel = Math.min(peachState.explosionThreshold, peachState.rageLevel + rageIncrease);
+
+    updateRageMeter();
+
+    // Trigger explosion if threshold reached
+    if (peachState.rageLevel >= peachState.explosionThreshold && peachState.particleExplosion) {
+        if (!peachState.particleExplosion.isActive()) {
+            peachState.particleExplosion.explode();
+            playExplosionSound(1.0);
+            peachState.rageLevel = 0;
+            updateRageMeter();
+        }
     }
 }
 
