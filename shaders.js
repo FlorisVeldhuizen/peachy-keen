@@ -1,6 +1,6 @@
-import { ShaderMaterial, Vector2 } from 'three';
+import { ShaderMaterial, Vector2 } from "three";
+import { viewHeight } from "./util";
 
-// Shared vertex shader (used by both materials)
 const VERTEX_SHADER = `
     varying vec2 vUv;
     void main() {
@@ -9,226 +9,228 @@ const VERTEX_SHADER = `
     }
 `;
 
-// Gradient colors
-const COLOR_TOP = 'vec3(0.42, 0.25, 0.45)';  // Violet
-const COLOR_BOTTOM = 'vec3(0.50, 0.30, 0.45)';  // Pink-violet
-
-/**
- * Create a simple gradient background material (fallback when shader is disabled)
- * @returns {THREE.ShaderMaterial} The gradient background material
- */
-export function createGradientBackgroundMaterial() {
-    return new ShaderMaterial({
-        uniforms: {
-            resolution: { value: new Vector2(window.innerWidth, window.innerHeight) }
-        },
-        vertexShader: VERTEX_SHADER,
-        fragmentShader: `
-            varying vec2 vUv;
-            
-            void main() {
-                vec2 center = vec2(0.5);
-                float distFromCenter = length(vUv - center);
-                
-                // Vertical gradient
-                vec3 gradientColor = mix(${COLOR_TOP}, ${COLOR_BOTTOM}, vUv.y);
-                
-                // Subtle radial variation
-                gradientColor -= smoothstep(0.0, 1.0, distFromCenter) * 0.15;
-                
-                gl_FragColor = vec4(gradientColor, 1.0);
-            }
-        `,
-        depthTest: false,
-        depthWrite: false
-    });
-}
-
-/**
- * Create the animated background shader material
- * @returns {THREE.ShaderMaterial} The background shader material
- */
 export function createBackgroundMaterial() {
-    return new ShaderMaterial({
-        uniforms: {
-            time: { value: 0 },
-            resolution: { value: new Vector2(window.innerWidth, window.innerHeight) }
-        },
-        vertexShader: VERTEX_SHADER,
-        fragmentShader: `
+  return new ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      heat: { value: 0 },
+      disco: { value: 0 },
+      kick: { value: 0 },
+      beat: { value: 0 },
+      ballAt: { value: new Vector2(0, 0.43) },
+      resolution: { value: new Vector2(window.innerWidth, viewHeight()) },
+    },
+    vertexShader: VERTEX_SHADER,
+    fragmentShader: `
             uniform float time;
+            uniform float heat;
+            uniform float disco;
+            uniform float kick;
+            uniform float beat;
+            uniform vec2 ballAt;
             uniform vec2 resolution;
             varying vec2 vUv;
-            
-            // Constants for better performance
-            const vec2 HASH_MULT = vec2(123.34, 456.21);
-            const float HASH_DOT = 45.32;
-            const float PI = 3.14159265359;
-            const float TWO_PI = 6.28318530718;
-            
-            // Noise function for organic patterns (optimized)
+
+            const mat2 OCTAVE_ROT = mat2(0.8, 0.6, -0.6, 0.8);
+
             float hash(vec2 p) {
-                p = fract(p * HASH_MULT);
-                p += dot(p, p + HASH_DOT);
+                p = fract(p * vec2(123.34, 456.21));
+                p += dot(p, p + 45.32);
                 return fract(p.x * p.y);
             }
-            
-            // Optimized noise with smoothstep
+
             float noise(vec2 p) {
                 vec2 i = floor(p);
                 vec2 f = fract(p);
-                f = f * f * (3.0 - 2.0 * f); // Hermite interpolation
-                
+                f = f * f * (3.0 - 2.0 * f);
                 float a = hash(i);
                 float b = hash(i + vec2(1.0, 0.0));
                 float c = hash(i + vec2(0.0, 1.0));
                 float d = hash(i + vec2(1.0, 1.0));
-                
                 return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
             }
-            
-            // Optimized HSL to RGB conversion
-            vec3 hsl2rgb(vec3 hsl) {
-                float c = (1.0 - abs(2.0 * hsl.z - 1.0)) * hsl.y;
-                float h6 = hsl.x * 6.0;
-                float x = c * (1.0 - abs(mod(h6, 2.0) - 1.0));
-                float m = hsl.z - c * 0.5;
-                
-                vec3 rgb = vec3(0.0);
-                if (h6 < 1.0) rgb = vec3(c, x, 0.0);
-                else if (h6 < 2.0) rgb = vec3(x, c, 0.0);
-                else if (h6 < 3.0) rgb = vec3(0.0, c, x);
-                else if (h6 < 4.0) rgb = vec3(0.0, x, c);
-                else if (h6 < 5.0) rgb = vec3(x, 0.0, c);
-                else rgb = vec3(c, 0.0, x);
-                
-                return rgb + m;
+
+            float fbm(vec2 p) {
+                float v = 0.0;
+                float a = 0.5;
+                for (int i = 0; i < 5; i++) {
+                    v += a * noise(p);
+                    p = OCTAVE_ROT * p * 2.03;
+                    a *= 0.5;
+                }
+                return v;
             }
-            
-            // Simplified reaction-diffusion pattern
-            float reactionDiffusion(vec2 uv, float t) {
-                // Multiple octaves for detail
-                float scale1 = 3.0;
-                float scale2 = 8.0;
-                float scale3 = 15.0;
-                
-                // Slow-moving liquid flow
-                vec2 flow1 = vec2(cos(t * 0.1), sin(t * 0.15)) * 0.3;
-                vec2 flow2 = vec2(sin(t * 0.08), cos(t * 0.12)) * 0.5;
-                
-                // Layered noise for reaction-diffusion-like patterns
-                float n1 = noise((uv + flow1) * scale1);
-                float n2 = noise((uv + flow2) * scale2);
-                float n3 = noise((uv - flow1 * 0.5) * scale3);
-                
-                // Create spots and patterns similar to reaction-diffusion
-                float pattern = n1 * 0.6 + n2 * 0.25 + n3 * 0.15;
-                
-                // Add liquid-like threshold behavior
-                pattern = smoothstep(0.4, 0.6, pattern);
-                
-                // Add some slow variation
-                pattern += sin(t * 0.5 + uv.x * 2.0) * 0.05;
-                pattern += cos(t * 0.3 + uv.y * 3.0) * 0.05;
-                
-                return pattern;
+
+            vec3 palette(float x) {
+                x = fract(x) * 4.0;
+                vec3 teal = vec3(0.12, 0.40, 0.46);
+                vec3 violet = vec3(0.32, 0.26, 0.60);
+                vec3 berry = vec3(0.58, 0.22, 0.46);
+                vec3 oceanBlue = vec3(0.16, 0.30, 0.58);
+                vec3 c = mix(teal, violet, smoothstep(0.0, 1.0, x));
+                c = mix(c, berry, smoothstep(1.0, 2.0, x));
+                c = mix(c, oceanBlue, smoothstep(2.0, 3.0, x));
+                return mix(c, teal, smoothstep(3.0, 4.0, x));
             }
-            
+
+            float motes(vec2 p, float t, float density, float rise) {
+                p.y -= t * rise;
+                vec2 g = p * density;
+                vec2 id = floor(g);
+                vec2 f = fract(g) - 0.5;
+                float h = hash(id);
+                vec2 o = (vec2(hash(id + 7.1), hash(id + 3.7)) - 0.5) * 0.6;
+                o += 0.15 * vec2(sin(t * 0.3 + h * 6.28), cos(t * 0.23 + h * 12.0));
+                float twinkle = pow(0.5 + 0.5 * sin(t * (0.5 + h) + h * 40.0), 8.0);
+                return step(0.9, h) * twinkle * smoothstep(0.05, 0.0, length(f - o));
+            }
+
+            vec3 hue(float x) {
+                return 0.5 + 0.5 * cos(6.2831 * (x + vec3(0.0, 0.33, 0.67)));
+            }
+
+            vec3 club(vec2 p, float smoke) {
+                vec2 d = p - ballAt;
+                float dist = length(d);
+                float ang = atan(d.x, -d.y);
+                vec3 light = vec3(0.0);
+                for (int k = 0; k < 6; k++) {
+                    float fk = float(k);
+                    float swing = sin(beat * 3.14159 * (0.125 + 0.03 * fk) + fk * 1.9);
+                    float a = (fk - 2.5) * 0.32 + swing * 0.45;
+                    float cone = 0.012 + dist * 0.035;
+                    float beam = smoothstep(cone, 0.0, abs(ang - a) * dist);
+                    beam *= smoothstep(0.03, 0.2, dist) * smoothstep(1.5, 0.3, dist);
+                    float pulse = mod(fk, 2.0) < 0.5 ? kick : 1.0 - kick;
+                    light += hue(fk / 6.0 + beat * 0.02) * beam * (0.2 + 0.8 * smoke) * (0.25 + 0.75 * pulse);
+                }
+
+                float spin = beat * 0.06;
+                vec2 polar = vec2((ang + spin) * 9.0, log(dist + 0.02) * 9.0);
+                vec2 cell = floor(polar);
+                vec2 f = fract(polar) - 0.5;
+                float h = hash(cell);
+                vec2 jitter = (vec2(hash(cell + 3.1), hash(cell + 7.7)) - 0.5) * 0.4;
+                float spot = step(0.62, h) * smoothstep(0.2, 0.06, length(f - jitter));
+                light += hue(h * 3.0 + beat * 0.05) * spot * (0.18 + 0.4 * kick) * smoothstep(0.08, 0.35, dist);
+
+                float floorGlow = smoothstep(-0.15, -0.55, p.y);
+                float tiles = 0.5 + 0.5 * sin(p.x * 7.0 + floor(beat) * 2.1);
+                light += hue(floor(beat) * 0.13 + p.x * 0.2) * floorGlow * tiles * (0.12 + 0.28 * kick);
+
+                float haze = exp(-dist * dist * 6.0);
+                light += vec3(1.0, 0.85, 1.0) * haze * (0.05 + 0.12 * kick);
+                return light;
+            }
+
             void main() {
                 vec2 uv = vUv;
-                
-                // Calculate distance from center for radial gradient
-                vec2 center = vec2(0.5, 0.5);
-                float distFromCenter = length(uv - center);
-                
-                // Create smooth vignette effect (0 at center, 1 at edges)
-                float vignette = smoothstep(0.0, 0.9, distFromCenter);
-                
-                // FUNKY flowing plasma with chromatic warping (subtle)
-                vec2 warp = vec2(
-                    sin(time * 0.4 + uv.y * 4.0 + cos(time * 0.25) * 1.5),
-                    cos(time * 0.35 + uv.x * 4.0 + sin(time * 0.2) * 1.5)
-                ) * 0.18;
-                
-                vec2 flow1 = uv + warp + vec2(sin(time * 0.3 + uv.y * 3.0), cos(time * 0.2 + uv.x * 3.0)) * 0.15;
-                vec2 flow2 = uv - warp * 0.5 + vec2(cos(time * 0.25 + uv.y * 4.0), sin(time * 0.35 + uv.x * 4.0)) * 0.12;
-                vec2 flow3 = uv + vec2(sin(time * 0.4 - uv.x * 2.0), cos(time * 0.3 - uv.y * 2.0)) * 0.18;
-                vec2 flow4 = uv + vec2(cos(time * 0.15 + uv.y * 6.0), sin(time * 0.18 + uv.x * 6.0)) * 0.1;
-                
-                // Multiple layers of flowing noise with different scales
-                float n1 = noise(flow1 * 4.0);
-                float n2 = noise(flow2 * 7.0);
-                float n3 = noise(flow3 * 3.0);
-                float n4 = noise(flow4 * 10.0);
-                
-                // Combine noise layers for ultra plasma effect
-                float plasma = (n1 * 0.4 + n2 * 0.3 + n3 * 0.2 + n4 * 0.1);
-                plasma = pow(plasma, 1.3); // Enhance contrast but keep it smooth
-                
-                // Create liquid simulation for additional trippy detail
-                float liquid = reactionDiffusion(uv, time);
-                
-                // Funky color cycling - multiple hue layers (subtle)
-                // Use smooth sinusoidal cycling instead of mod for seamless transitions
-                float baseHue = sin(time * 0.022) * 0.5 + 0.5;
-                float hueWobble = sin(time * 0.6 + plasma * TWO_PI) * 0.05;
-                float hue1 = fract(baseHue + plasma * 0.25 + liquid * 0.1 + hueWobble);
-                float hue2 = fract(baseHue + plasma * 0.35 + liquid * 0.12 - hueWobble);
-                
-                // Pulsating saturation for extra funkiness (subtle)
-                float satPulse = sin(time * 0.7) * 0.05 + 0.95;
-                float saturation1 = mix(0.6, 0.35, vignette) * satPulse;
-                float saturation2 = mix(0.55, 0.3, vignette) * satPulse;
-                saturation1 += plasma * 0.15;
-                saturation2 += n4 * 0.12;
-                
-                // Dynamic brightness with pulsing (subtle)
-                float brightPulse = sin(time * 0.5 + plasma * PI) * 0.03 + 1.0;
-                float centerBoost = 0.20;
-                float edgeDarkness = 0.09;
-                float lightness1 = mix(centerBoost, edgeDarkness, vignette) * brightPulse;
-                lightness1 += plasma * 0.12 + liquid * 0.05;
-                float lightness2 = mix(centerBoost + 0.04, edgeDarkness + 0.02, vignette) * brightPulse;
-                lightness2 += n2 * 0.10 + liquid * 0.04;
-                
-                // Create multiple color layers
-                vec3 color1 = hsl2rgb(vec3(hue1, saturation1, lightness1));
-                vec3 color2 = hsl2rgb(vec3(hue2, saturation2, lightness2));
-                
-                // Mix colors based on plasma with smooth blending
-                vec3 finalColor = mix(color1, color2, plasma * 0.7 + 0.3);
-                
-                // Add subtle complementary color splashes
-                float accentHue1 = fract(hue1 + 0.5);
-                float accentHue2 = fract(hue2 + 0.33);
-                vec3 accentColor1 = hsl2rgb(vec3(accentHue1, saturation1 * 0.85, lightness1 * 0.75));
-                vec3 accentColor2 = hsl2rgb(vec3(accentHue2, saturation2 * 0.8, lightness2 * 0.7));
-                
-                finalColor = mix(finalColor, accentColor1, liquid * 0.12);
-                finalColor = mix(finalColor, accentColor2, n4 * 0.08);
-                
-                // Chromatic aberration-style color split (subtle)
-                float chromaticShift = sin(time * 0.35 + distFromCenter * 3.5) * 0.012;
-                vec3 chromaticR = hsl2rgb(vec3(hue1 + chromaticShift, saturation1, lightness1));
-                vec3 chromaticB = hsl2rgb(vec3(hue2 - chromaticShift, saturation2, lightness2));
-                finalColor = vec3(
-                    mix(finalColor.r, chromaticR.r, 0.08),
-                    finalColor.g,
-                    mix(finalColor.b, chromaticB.b, 0.08)
+                float aspect = resolution.x / resolution.y;
+                vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
+                float t = time * 0.022;
+                vec2 sp = p * 0.9;
+
+                vec2 q = vec2(
+                    fbm(sp + vec2(0.0, t)),
+                    fbm(sp + vec2(5.2, 1.3) - t * 0.7)
                 );
-                
-                // Pulsating glow at center (subtle)
-                float glow = smoothstep(0.6, 0.0, distFromCenter) * (0.12 + sin(time * 1.0) * 0.04);
-                finalColor += glow;
-                
-                // Softer vignette to let the funk shine through
-                finalColor *= (1.0 - vignette * 0.5);
-                
-                gl_FragColor = vec4(finalColor, 1.0);
+                vec2 r = vec2(
+                    fbm(sp + 2.4 * q + vec2(1.7, 9.2) + t * 0.8),
+                    fbm(sp + 2.4 * q + vec2(8.3, 2.8) - t * 0.6)
+                );
+                float smoke = fbm(sp + 2.2 * r);
+
+                float phase = time * 0.004 + q.x * 0.35 + smoke * 0.15;
+                vec3 deep = palette(phase) * 0.55;
+                vec3 mid = palette(phase + 0.12);
+                vec3 pale = mix(palette(phase + 0.25), vec3(1.0, 0.86, 0.80), 0.4);
+                vec3 rose = mix(vec3(0.90, 0.46, 0.60), vec3(0.98, 0.30, 0.38), heat);
+                vec3 ember = vec3(1.0, 0.80, 0.68);
+
+                vec3 col = mix(deep, mid * 1.15, smoothstep(0.3, 0.62, smoke));
+                col = mix(col, pale, smoothstep(0.5, 0.75, smoke) * clamp(length(r) * 0.7, 0.0, 1.0) * 0.6);
+                col = mix(col, col * vec3(1.3, 0.75, 0.8) + rose * 0.08, heat * 0.5);
+
+                vec2 w = p + 0.7 * r;
+                float folds = sin(w.x * 2.6 + w.y * 1.8 + smoke * 5.0 + t * 3.0);
+                float sheen = pow(0.5 + 0.5 * folds, 8.0);
+                col += pale * sheen * (0.12 + 0.2 * smoke);
+
+                float strand = (smoke - 0.52) * 22.0;
+                float thread = exp(-strand * strand);
+                col += rose * thread * (0.1 + 0.18 * r.y);
+
+                vec2 toSource = p - vec2(0.45 * aspect, 0.75);
+                float shafts = fbm(vec2(atan(toSource.y, toSource.x) * 4.0, t * 1.2));
+                shafts = pow(shafts, 3.0) * smoothstep(1.8, 0.0, length(toSource));
+                col += mix(pale, ember, 0.4) * shafts * (0.2 + heat * 0.15) * (0.4 + smoke);
+
+                float breath = 0.5 + 0.5 * sin(time * 0.25);
+                float glow = exp(-dot(p, p) * 2.2) * (0.22 + 0.06 * breath + heat * 0.12);
+                col += mix(vec3(1.0, 0.62, 0.50), rose, 0.3 + heat * 0.5) * glow * (0.5 + smoke);
+
+                float dust = motes(p, time * 0.6, 9.0, 0.012) * 0.25 + motes(p * 1.6 + 3.1, time * 0.6, 9.0, 0.02) * 0.12;
+                col += pale * dust * (0.3 + smoke);
+
+                col *= mix(0.65, 1.0, smoothstep(1.4, 0.25, length(p * vec2(0.8, 1.0))));
+
+                if (disco > 0.001) {
+                    col = mix(col, col * vec3(0.35, 0.28, 0.5), disco * 0.7);
+                    col += club(p, smoke) * disco;
+                }
+
+                gl_FragColor = vec4(col, 1.0);
             }
         `,
-        depthTest: false,
-        depthWrite: false
-    });
+    depthTest: false,
+    depthWrite: false,
+  });
 }
 
+export function createBackdropBlitMaterial(smoke) {
+  return new ShaderMaterial({
+    uniforms: {
+      tSmoke: { value: smoke },
+      time: { value: 0 },
+      lensAt: { value: new Vector2(0.5, 0.5) },
+      lensPower: { value: 0 },
+      aspect: { value: 1 },
+    },
+    vertexShader: VERTEX_SHADER,
+    fragmentShader: `
+            uniform sampler2D tSmoke;
+            uniform float time;
+            uniform vec2 lensAt;
+            uniform float lensPower;
+            uniform float aspect;
+            varying vec2 vUv;
+
+            float hash(vec2 p) {
+                p = fract(p * vec2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return fract(p.x * p.y);
+            }
+
+            void main() {
+                vec2 uv = vUv;
+                float shade = 1.0;
+                if (lensPower > 0.0) {
+                    vec2 d = (vUv - lensAt) * vec2(aspect, 1.0);
+                    float r = length(d);
+                    float bend = lensPower * 0.012 / (r * r + 0.004);
+                    float swirl = lensPower * 0.35 / (r * 6.0 + 0.2);
+                    float c = cos(swirl);
+                    float s = sin(swirl);
+                    d = mat2(c, -s, s, c) * d * (1.0 + bend);
+                    uv = lensAt + d / vec2(aspect, 1.0);
+                    shade = mix(1.0, smoothstep(0.02, 0.07, r), lensPower);
+                }
+                vec3 col = texture2D(tSmoke, uv).rgb * shade;
+                col += (hash(gl_FragCoord.xy + fract(time * 0.37) * 97.0) - 0.5) * 0.025;
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `,
+    depthTest: false,
+    depthWrite: false,
+  });
+}

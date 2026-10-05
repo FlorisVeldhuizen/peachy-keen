@@ -1,234 +1,341 @@
-import { Group, PlaneGeometry, Mesh, Clock } from 'three';
-import { createBackgroundMaterial, createGradientBackgroundMaterial } from './shaders.js';
-import { loadPeachModel } from './peach.js';
-import { setupLighting } from './lighting.js';
-import { initInteraction, setPeachMesh, updatePeachPhysics, processHandSlap } from './interaction.js';
-import { initScene, setupResizeHandler } from './scene.js';
-import { resumeAudioContext } from './audio.js';
-import { PerformanceMonitor } from './performance.js';
-import { initHandTracking, startHandTracking, stopHandTracking, toggleVisualization, isHandTrackingEnabled } from './handTracking.js';
+import { Group, Clock, Color } from "three";
+import { initScene, setupResizeHandler, QualityGovernor } from "./scene";
+import { createBackdrop } from "./backdrop";
+import { Peach } from "./peach";
+import { Juice, Droplets, JUICE_LAYER } from "./juice";
+import { Lens } from "./lens";
+import { Interaction } from "./interaction";
+import { UI } from "./ui";
+import { Settings } from "./settings";
+import { Talk } from "./spicy";
+import { Naughty } from "./naughty";
+import { MoodLight } from "./mood";
+import { Wild } from "./wild";
+import { Shock } from "./shock";
+import { SkinRings } from "./rings";
+import { keepAudioUnlocked, loadSounds, setMuted, playLensHit } from "./audio";
+import { reducedMotion } from "./util";
 
-// Audio is now lazy-loaded on first interaction for better performance
+const MODE_KEY = "peachy-keen-mode";
+const MODES = ["classic", "idle"];
+const SWITCH_KEY = "peachy-keen-switching";
 
-// Loading screen management
-const soundOverlay = document.getElementById('sound-overlay');
-const loadingProgress = document.getElementById('loading-progress');
-const loadingStatus = document.getElementById('loading-status');
-const loadingItems = document.getElementById('loading-items');
-const soundOverlayContent = document.getElementById('sound-overlay-content');
-let loadingComplete = false;
-let hasStarted = false;
+const intro = document.getElementById("intro");
+const introTitle = document.getElementById("intro-title");
+const introStatus = document.getElementById("intro-status");
+const modeButtons = [...document.querySelectorAll("[data-mode]")];
 
-function updateLoadingProgress(percent, status = 'Loading...') {
-    if (loadingProgress) {
-        loadingProgress.style.width = `${percent}%`;
-    }
-    if (loadingStatus) {
-        loadingStatus.textContent = status;
-    }
+function readMode() {
+  const asked = new URLSearchParams(window.location.search).get("mode");
+  if (MODES.includes(asked)) return asked;
+  try {
+    const saved = localStorage.getItem(MODE_KEY);
+    if (MODES.includes(saved)) return saved;
+  } catch {
+    // Blocked storage falls back to the classic game.
+  }
+  return "classic";
 }
 
-function showStartButton() {
-    // Hide loading items
-    if (loadingItems) {
-        loadingItems.style.opacity = '0';
-        setTimeout(() => {
-            loadingItems.style.display = 'none';
-            // Show click to start message
-            if (soundOverlayContent) {
-                soundOverlayContent.style.display = 'block';
-            }
-        }, 300);
-    }
+function saveMode(value) {
+  try {
+    localStorage.setItem(MODE_KEY, value);
+  } catch {
+    // The mode is then picked again on the next visit.
+  }
 }
 
-function hideLoadingScreen() {
-    if (soundOverlay && loadingComplete && hasStarted) {
-        soundOverlay.style.opacity = '0';
-        setTimeout(() => {
-            soundOverlay.style.display = 'none';
-        }, 300);
-    }
+function takeSwitch() {
+  try {
+    const switching = sessionStorage.getItem(SWITCH_KEY) === "1";
+    sessionStorage.removeItem(SWITCH_KEY);
+    return switching;
+  } catch {
+    return false;
+  }
 }
 
-// Handle click anywhere on sound overlay to start
-if (soundOverlay) {
-    soundOverlay.addEventListener('click', async (event) => {
-        if (!loadingComplete || hasStarted) return;
-        
-        // Stop event from propagating to prevent triggering peach smack
-        event.stopPropagation();
-        event.preventDefault();
-        
-        hasStarted = true;
-        
-        // Resume audio context (required by browsers)
-        await resumeAudioContext();
-        
-        // Hide loading screen
-        hideLoadingScreen();
+let mode = readMode();
+let started = false;
+const switching = takeSwitch();
+const showMode = () =>
+  modeButtons.forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode)),
+  );
+modeButtons.forEach((b) =>
+  b.addEventListener("click", () => {
+    if (!started) {
+      mode = b.dataset.mode;
+      showMode();
+    } else if (b.dataset.mode !== mode) {
+      saveMode(b.dataset.mode);
+      try {
+        sessionStorage.setItem(SWITCH_KEY, "1");
+      } catch {
+        // Without session storage the start screen shows after the switch.
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("mode");
+      window.history.replaceState(null, "", url);
+      window.location.reload();
+    }
+  }),
+);
+showMode();
+
+const { scene, camera, renderer, lights } = initScene();
+const quality = new QualityGovernor(renderer);
+const backdrop = createBackdrop(scene, renderer);
+setupResizeHandler(camera, renderer, () => {
+  backdrop.resize();
+  lens.resize();
+});
+backdrop.setMotion(!reducedMotion.matches);
+
+const group = new Group();
+group.visible = false;
+scene.add(group);
+
+const peach = new Peach(group);
+const juice = new Juice(scene);
+const droplets = new Droplets(scene);
+const lens = new Lens(renderer, scene, camera);
+juice.onSplat = (position, velocity) => lens.splat(position, velocity);
+lens.onHit = () => playLensHit(1);
+const ui = new UI();
+const talk = new Talk();
+const mood = new MoodLight(scene, renderer, lights);
+
+const settings = new Settings((key, value) => {
+  if (key === "sound") setMuted(!value);
+  if (key === "quality") quality.setMode(value);
+  if (key === "splatter") lens.enabled = value;
+  if (key === "firmness") interaction.setFirmness(value);
+  if (key === "tool") interaction.setTool(value);
+  if (key === "talk") talk.setLevel(value);
+  if (key === "moodLight") mood.set(value);
+  naughty.set(key, value);
+  wild.set(key, value);
+  if (key === "lingerie" && value) interaction.dressUp(true);
+  if (key === "lingerie" && !value) interaction.undress();
+});
+
+const interaction = new Interaction({
+  scene,
+  peach,
+  group,
+  camera,
+  juice,
+  droplets,
+  lens,
+  ui,
+  settings,
+  talk,
+});
+const naughty = new Naughty(interaction, talk);
+const wild = new Wild({ scene, camera, interaction, talk, backdrop });
+const shock = new Shock(renderer, interaction);
+const skinRings = new SkinRings(interaction);
+settings.applyAll();
+let idle = null;
+
+function setProgress(fraction) {
+  introTitle.style.setProperty("--progress", `${Math.round(fraction * 100)}%`);
+}
+
+const clearColor = new Color();
+// Materials keep sampling the last shadow map after shadows switch off, so blank it.
+const clearShadow = () => {
+  const { map } = lights.key.shadow;
+  if (!map) return;
+  const alpha = renderer.getClearAlpha();
+  renderer.getClearColor(clearColor);
+  const previous = renderer.getRenderTarget();
+  renderer.setRenderTarget(map);
+  renderer.setClearColor(0xffffff, 1);
+  renderer.clear();
+  renderer.setRenderTarget(previous);
+  renderer.setClearColor(clearColor, alpha);
+};
+
+function drawEverything() {
+  const culled = [];
+  const hidden = [];
+  scene.traverse((o) => {
+    /* eslint-disable no-param-reassign */
+    if (!o.visible && !o.isLight) {
+      hidden.push(o);
+      o.visible = true;
+    }
+    if (o.frustumCulled) {
+      culled.push(o);
+      o.frustumCulled = false;
+    }
+    /* eslint-enable no-param-reassign */
+  });
+  camera.layers.enable(JUICE_LAYER);
+  renderer.setScissor(0, 0, 1, 1);
+  renderer.setScissorTest(true);
+  [true, false].forEach((shadows) => {
+    renderer.shadowMap.enabled = shadows;
+    // Toggling shadows alone does not make three pick the other shader variant.
+    scene.traverse(({ material }) => {
+      [].concat(material ?? []).forEach((m) => {
+        // eslint-disable-next-line no-param-reassign
+        m.needsUpdate = true;
+      });
     });
-}
-
-// Initialize scene, camera, and renderer
-updateLoadingProgress(10, 'Initializing...');
-const { scene, camera, renderer } = initScene();
-
-// Initialize performance monitor
-const perfMonitor = new PerformanceMonitor();
-perfMonitor.setRenderer(renderer);
-perfMonitor.setScene(scene);
-
-updateLoadingProgress(20, 'Creating background...');
-
-// Create both background materials
-const animatedBackgroundMaterial = createBackgroundMaterial();
-const gradientBackgroundMaterial = createGradientBackgroundMaterial();
-const backgroundGeometry = new PlaneGeometry(2, 2);
-
-// Start with the animated background
-const background = new Mesh(backgroundGeometry, animatedBackgroundMaterial);
-scene.add(background);
-
-// Set reference for performance monitoring
-perfMonitor.setBackgroundMesh(background);
-perfMonitor.setBackgroundMaterials(animatedBackgroundMaterial, gradientBackgroundMaterial);
-
-// Create the peach group
-const peachGroup = new Group();
-scene.add(peachGroup);
-
-// Setup lighting
-updateLoadingProgress(40, 'Setting up lights...');
-const { ringLights, otherLights } = setupLighting(scene);
-
-// Set ring lights reference for performance monitoring
-perfMonitor.setRingLights(ringLights);
-
-// Load the peach model
-updateLoadingProgress(50, 'Loading peach model...');
-loadPeachModel(peachGroup, (meshes) => {
-    updateLoadingProgress(80, 'Preparing physics...');
-    setPeachMesh(meshes);
-    updateLoadingProgress(100, 'Ready!');
-    
-    // Show start button once model is loaded
-    setTimeout(() => {
-        loadingComplete = true;
-        showStartButton();
-    }, 300);
-});
-
-// Initialize interaction system
-updateLoadingProgress(60, 'Setting up interactions...');
-initInteraction(peachGroup, camera, scene, perfMonitor);
-
-// Initialize hand tracking (but don't start it yet)
-initHandTracking(camera, (screenX, screenY, velocityX, velocityY, peakVelocity) => {
-    // Callback when hand slap is detected
-    processHandSlap(screenX, screenY, velocityX, velocityY, peakVelocity);
-});
-
-// Function to toggle hand tracking (used by button and keyboard)
-async function toggleHandTracking() {
-    if (isHandTrackingEnabled()) {
-        stopHandTracking();
-        if (handTrackingButton) {
-            handTrackingButton.textContent = '👋 Enable Hand Tracking (ESC)';
-            handTrackingButton.classList.remove('active');
-        }
-        if (visualizationButton) {
-            visualizationButton.style.display = 'none';
-        }
-        if (handTrackingStatus) {
-            handTrackingStatus.style.display = 'none';
-        }
-    } else {
-        const success = await startHandTracking();
-        if (success) {
-            if (handTrackingButton) {
-                handTrackingButton.textContent = '👋 Disable Hand Tracking (ESC)';
-                handTrackingButton.classList.add('active');
-            }
-            // Show visualization button when hand tracking is enabled
-            if (visualizationButton) {
-                visualizationButton.style.display = 'block';
-            }
-            // Show status indicator
-            if (handTrackingStatus) {
-                handTrackingStatus.style.display = 'block';
-            }
-            // Auto-enable visualization for debugging
-            toggleVisualization(true);
-            if (visualizationButton) {
-                visualizationButton.classList.add('active');
-            }
-        }
-    }
-}
-
-// Setup hand tracking button
-const handTrackingButton = document.getElementById('hand-tracking-button');
-const visualizationButton = document.getElementById('visualization-button');
-const handTrackingStatus = document.getElementById('hand-tracking-status');
-
-if (handTrackingButton) {
-    handTrackingButton.addEventListener('click', toggleHandTracking);
-    handTrackingButton.textContent = '👋 Enable Hand Tracking (ESC)';
-    // Add interactive class for cursor handling
-    handTrackingButton.classList.add('interactive-element');
-}
-
-// Keyboard shortcut: ESC to toggle hand tracking
-window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        toggleHandTracking();
-    }
-});
-
-// Setup visualization toggle (for debugging)
-if (visualizationButton) {
-    visualizationButton.addEventListener('click', () => {
-        const isVisible = document.getElementById('hand-tracking-canvas').style.display !== 'none';
-        toggleVisualization(!isVisible);
-        visualizationButton.classList.toggle('active');
-    });
-
-    visualizationButton.classList.add('interactive-element');
-}
-
-// Setup window resize handler
-updateLoadingProgress(70, 'Finalizing...');
-setupResizeHandler(camera, renderer, animatedBackgroundMaterial, gradientBackgroundMaterial);
-
-// Animation loop with clock for accurate timing
-const clock = new Clock();
-
-// Idle floating animation timer
-let idleTime = 0;
-
-// Animation loop
-function animate() {
-    requestAnimationFrame(animate);
-    
-    // Use clock for accurate delta time (capped to avoid large jumps)
-    const delta = Math.min(clock.getDelta(), 0.1);
-    idleTime += delta;
-    
-    // Update background shader (only if enabled)
-    if (perfMonitor.isFeatureEnabled('backgroundShader')) {
-        animatedBackgroundMaterial.uniforms.time.value += delta;
-    }
-    
-    // Update peach physics and animation
-    // Pass performance monitor to check if physics is enabled
-    updatePeachPhysics(delta, idleTime, perfMonitor);
-    
-    // Update performance monitor
-    perfMonitor.update();
-    
     renderer.render(scene, camera);
+  });
+  renderer.render(lens.overlay, lens.overlayCamera);
+  renderer.render(shock.scene, shock.camera);
+  renderer.setScissorTest(false);
+  camera.layers.disable(JUICE_LAYER);
+  /* eslint-disable no-param-reassign */
+  culled.forEach((o) => {
+    o.frustumCulled = true;
+  });
+  hidden.forEach((o) => {
+    o.visible = false;
+  });
+  /* eslint-enable no-param-reassign */
+  clearShadow();
 }
 
-animate();
+// Every lit pixel pays for each visible light, so lights that are off stay out of the shaders.
+const extraLights = [mood.candle, mood.halo, ...wild.disco.lights];
+const showExtraLights = (shown) =>
+  extraLights.forEach((light) => {
+    // eslint-disable-next-line no-param-reassign
+    light.visible = shown;
+  });
+
+async function warmLights(lit) {
+  showExtraLights(lit);
+  renderer.shadowMap.enabled = true;
+  const shadowed = renderer.compileAsync(scene, camera);
+  renderer.shadowMap.enabled = false;
+  await Promise.all([
+    shadowed,
+    renderer.compileAsync(scene, camera),
+    renderer.compileAsync(lens.overlay, lens.overlayCamera),
+    renderer.compileAsync(shock.scene, shock.camera),
+  ]);
+  // The render loop switches unlit lights off while the compile runs.
+  showExtraLights(lit);
+  // ANGLE on Metal builds a shader on its first draw, not at compile, so draw every variant into one pixel.
+  drawEverything();
+}
+
+async function warm() {
+  await warmLights(true);
+  await warmLights(false);
+}
+
+let warming = false;
+renderer.domElement.addEventListener("webglcontextrestored", async () => {
+  warming = true;
+  await warm();
+  warming = false;
+});
+
+async function startIdle() {
+  introStatus.textContent = "Opening the shop";
+  const { createIdle } = await import("./idle");
+  idle = createIdle({
+    interaction,
+    peach,
+    camera,
+    settings,
+    talk,
+    buzzer: wild.buzzer,
+    scene,
+    renderer,
+    backdrop,
+    mood,
+  });
+  naughty.set("achievements", false);
+  idle.prepare();
+  await warm();
+  idle.ready();
+}
+
+peach.load(setProgress).then(async () => {
+  setProgress(1);
+  interaction.prepareHalves();
+  await warm();
+  juice.clear();
+  loadSounds();
+  keepAudioUnlocked();
+
+  const start = async () => {
+    started = true;
+    intro.classList.remove("is-ready");
+    saveMode(mode);
+    if (mode === "idle") await startIdle();
+    interaction.requestShake();
+    intro.classList.add("is-leaving");
+    setTimeout(() => intro.remove(), 700);
+    interaction.begin();
+    idle?.begin();
+  };
+
+  if (switching) {
+    start();
+    return;
+  }
+  introStatus.textContent = "Click anywhere to begin. Sound on.";
+  intro.classList.add("is-ready");
+  intro.addEventListener("click", start, { once: true });
+});
+
+const SHADOW_HOLD = 1.5;
+let shadowHold = 0;
+const castersInPlay = () =>
+  settings.shadows === "always" ||
+  interaction.bottle.carried ||
+  interaction.bottle.stream.active ||
+  wild.disco.mirror.holder.visible ||
+  interaction.halves?.some((h) => h.holder.visible);
+
+const clock = new Clock();
+renderer.setAnimationLoop(() => {
+  if (warming) return;
+  const realDelta = Math.min(clock.getDelta(), 1 / 20);
+  shadowHold = castersInPlay()
+    ? SHADOW_HOLD
+    : Math.max(0, shadowHold - realDelta);
+  const shadows = shadowHold > 0;
+  if (renderer.shadowMap.enabled && !shadows) clearShadow();
+  renderer.shadowMap.enabled = shadows;
+  const delta = realDelta * interaction.timeScale(realDelta);
+  // The camera and bottle read the framing, so it updates before them.
+  idle?.frame(realDelta);
+  interaction.update(delta);
+  naughty.update(delta);
+  idle?.update(realDelta);
+  wild.update(delta, realDelta);
+  peach.update(delta, interaction.heat / 100);
+  backdrop.update(delta, interaction.heat / 100);
+  mood.update(realDelta, interaction.heat / 100);
+  showExtraLights(extraLights.some((light) => light.intensity > 0));
+  peach.updateRing(camera);
+  quality.update(realDelta);
+  settings.showFps(quality.fps);
+  juice.splatZ = camera.position.z - 2.5;
+  const halfHeight = 2.5 * Math.tan((camera.fov * Math.PI) / 360);
+  juice.splatHalf.set(halfHeight * camera.aspect, halfHeight);
+  droplets.update(delta);
+  lens.update(delta);
+  skinRings.update(delta);
+  shock.update(realDelta);
+  backdrop.render();
+  lens.render([juice, droplets]);
+  shock.render();
+});
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/peachy-keen/sw.js").catch(() => {});
+  });
+}
