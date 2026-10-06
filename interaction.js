@@ -133,6 +133,7 @@ export class Interaction {
     this.heatGain = 1;
     this.heatCap = 100;
     this.coolRate = 1;
+    this.helpersHold = false;
     this.twerkAfter = CFG.TWERK_IDLE_SECONDS;
     this.oil = 0;
     this.smacks = 0;
@@ -267,6 +268,7 @@ export class Interaction {
 
     window.addEventListener("pointermove", (e) => {
       p.present = !isUi(e);
+      p.touch = e.pointerType !== "mouse";
       record(e);
     });
     window.addEventListener("pointerdown", (e) => {
@@ -1062,6 +1064,7 @@ export class Interaction {
     this.emit("snapback", {
       local: r.local,
       normal: r.normal,
+      direction: this.tempB.copy(pull).negate(),
       amount: Math.min(1, length / CFG.GRAB_REACH),
     });
     if (this.heat >= 100) this.charge();
@@ -1572,6 +1575,7 @@ export class Interaction {
     this.juice.update(1 / 30);
     this.freeze = 0.05;
     if (!reducedMotion.matches) {
+      this.freeze = Math.max(this.freeze, 0.06);
       this.slowmo = Math.min(0.5, 0.35 * power);
       this.trauma = Math.max(this.trauma, 0.8);
       this.zoomVelocity -= 2;
@@ -1847,6 +1851,9 @@ export class Interaction {
     }
     const hit = this.raycastAt(p.x, p.y);
     p.inside = !!hit;
+    const fullSwipe = p.touch
+      ? CFG.FULL_SWIPE_SPEED / CFG.TOUCH_SWIPE_BOOST
+      : CFG.FULL_SWIPE_SPEED;
     const swiping =
       p.armed &&
       !(p.pressed && p.grabbed) &&
@@ -1858,7 +1865,7 @@ export class Interaction {
           crossed,
           motion.vx,
           motion.vy,
-          clamp(motion.speed / CFG.FULL_SWIPE_SPEED, 0.3, 2),
+          clamp(motion.speed / fullSwipe, 0.3, 2),
         );
       p.armed = !p.rubbing;
     } else if (swiping) {
@@ -1867,7 +1874,7 @@ export class Interaction {
         hit,
         motion.vx,
         motion.vy,
-        clamp(motion.speed / CFG.FULL_SWIPE_SPEED, 0.3, 2),
+        clamp(motion.speed / fullSwipe, 0.3, 2),
       );
     } else if (p.pressed) {
       if (this.canStrip() && this.isStripPull()) {
@@ -2089,7 +2096,7 @@ export class Interaction {
     const p = this.pointer;
     const held =
       !this.carrying &&
-      (this.grab || this.recoil || (p.pressed && p.downOnPeach));
+      (this.grab || this.recoil || (p.pressed && p.downOnPeach && !p.rubbing));
     this.swayRate +=
       ((held ? 0 : 1) - this.swayRate) * (1 - Math.exp(-delta * 8));
     this.sway += delta * this.swayRate;

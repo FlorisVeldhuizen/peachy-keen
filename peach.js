@@ -234,6 +234,8 @@ const VERTEX_HEADER = `
   uniform vec4 uGrabDent;
   attribute float stiffness;
   attribute float plant;
+  attribute float stretch;
+  varying float vStretch;
   uniform vec3 uStemBase;
   uniform vec3 uLeafBend;
   uniform vec4 uLeafAxis;
@@ -304,6 +306,7 @@ const VERTEX_NORMAL = `
   vec3 objectNormal = vec3(normal);
   vec3 jiggled = position;
   vRestPosition = position;
+  vStretch = stretch;
   vFabricPush = 0.0;
   if (uJiggleActive > 0.5) {
     float give = 1.0 - stiffness;
@@ -389,6 +392,9 @@ const FRAGMENT_HEADER = `
   uniform float uCutSide;
   uniform float uStemY;
   uniform float uEnvSpecular;
+  uniform vec3 uStemBase;
+  uniform mat3 normalMatrix;
+  varying float vStretch;
   varying vec4 vRubTilt;
 
   vec3 ringSparkle(vec3 viewPosition, vec3 n, float rough) {
@@ -420,6 +426,9 @@ const FRAGMENT_HEADER = `
   uniform vec4 uPrintUps[${PEACH_CONFIG.MAX_PRINTS}];
   uniform float uPrintDefinitions[${PEACH_CONFIG.MAX_PRINTS}];
   uniform sampler2D uPrintTexture;
+  uniform sampler2D uPaddleTexture;
+  uniform sampler2D uKissTexture;
+  uniform float uPrintKind[${PEACH_CONFIG.MAX_PRINTS}];
   uniform float uPrintInk;
   varying vec3 vRestPosition;
   varying float vFabricPush;
@@ -462,8 +471,8 @@ const FRAGMENT_HEADER = `
     return normalize(abs(det) * n - grad);
   }
 
-  float handprintMask() {
-    float m = 0.0;
+  vec2 handprintMask() {
+    vec2 m = vec2(0.0);
     for (int i = 0; i < ${PEACH_CONFIG.MAX_PRINTS}; i++) {
       float age = uTime - uPrints[i].w;
       if (age < 0.0 || age > ${PEACH_CONFIG.PRINT_LIFE.toFixed(1)}) continue;
@@ -476,12 +485,15 @@ const FRAGMENT_HEADER = `
       float wrap = 1.0 - smoothstep(0.15, 0.45, abs(dot(q, n)) / abs(size));
       float rise = smoothstep(0.0, 0.15, age);
       float fade = 1.0 - smoothstep(${(PEACH_CONFIG.PRINT_LIFE * 0.3).toFixed(1)}, ${PEACH_CONFIG.PRINT_LIFE.toFixed(1)}, age);
-      vec3 print = texture2D(uPrintTexture, uv).rgb;
+      float kind = uPrintKind[i];
+      vec3 print = kind > 1.5 ? texture2D(uKissTexture, uv).rgb : kind > 0.5 ? texture2D(uPaddleTexture, uv).rgb : texture2D(uPrintTexture, uv).rgb;
+      float lips = kind > 1.5 ? 1.0 : kind > 0.5 ? 0.0 : uPrintInk;
       float definition = uPrintDefinitions[i] * smoothstep(0.15, 1.8, age);
       float shape = mix(print.b * 0.8, print.r, definition);
-      m += shape * wrap * rise * fade * uPrintNormals[i].w;
+      float mark = shape * wrap * rise * fade * uPrintNormals[i].w;
+      m += vec2(mark, mark * lips);
     }
-    return min(m, 1.0);
+    return vec2(min(m.x, 1.0), m.x > 0.0 ? m.y / m.x : 0.0);
   }
 
   ${LINGERIE_COMMON}
@@ -702,6 +714,23 @@ const CUT_TEST = `
   #endif
 `;
 
+// Where the UVs stretch (stem hole, filled side crease) the fuzz comes from the rest position instead.
+const HOLE_FUZZ = `
+  float holeFuzz = max(1.0 - smoothstep(0.1, 0.14, length(vRestPosition - uStemBase) / uBounds.w), vStretch);
+  if (holeFuzz > 0.0) {
+    vec3 objectNormal = normalize(oilBase * normalMatrix);
+    vec3 facing = pow(abs(objectNormal), vec3(4.0));
+    facing /= facing.x + facing.y + facing.z;
+    vec3 q = vRestPosition / uBounds.w * 0.42;
+    vec2 tx = texture2D(normalMap, q.zy).xy * 2.0 - 1.0;
+    vec2 ty = texture2D(normalMap, q.xz).xy * 2.0 - 1.0;
+    vec2 tz = texture2D(normalMap, q.xy).xy * 2.0 - 1.0;
+    vec3 tilt = vec3(0.0, tx.y, tx.x) * facing.x + vec3(ty.x, 0.0, ty.y) * facing.y + vec3(tz, 0.0) * facing.z;
+    vec3 holeNormal = normalize(oilBase + normalMatrix * tilt * normalScale.x);
+    normal = normalize(mix(normal, holeNormal, holeFuzz));
+  }
+`;
+
 const FRAGMENT_COLOR = `
   ${CUT_TEST}
   #ifdef SKIN_FADE
@@ -725,9 +754,10 @@ const FRAGMENT_COLOR = `
     vec3 glaze = diffuseColor.rgb * mix(vec3(1.0, 0.8, 0.45), uSkinDeep * 1.5, thick) + uSkinDeep * 0.06 * thick;
     diffuseColor.rgb = mix(diffuseColor.rgb, glaze, skinHoney);
   }
-  float welt = handprintMask() * (1.0 - leaf);
-  vec3 ink = mix(diffuseColor.rgb * vec3(1.02, 0.42, 0.46), vec3(0.62, 0.0, 0.08), uPrintInk);
-  diffuseColor.rgb = mix(diffuseColor.rgb, ink, welt * mix(0.55, 0.95, uPrintInk));
+  vec2 marks = handprintMask();
+  float welt = marks.x * (1.0 - leaf);
+  vec3 ink = mix(diffuseColor.rgb * vec3(1.02, 0.42, 0.46), vec3(0.62, 0.0, 0.08), marks.y);
+  diffuseColor.rgb = mix(diffuseColor.rgb, ink, welt * mix(0.55, 0.95, marks.y));
   diffuseColor.rgb *= mix(vec3(1.0), vec3(1.08, 0.7, 0.72), uHeat * 0.6);
   if (uLingerie.x > 0.5 && uLingerie.z > 0.0) {
     diffuseColor.rgb *= 1.0 - fabricShadow(vRestPosition, uCutPlane) * uLingerie.z * (1.0 - leaf);
@@ -736,6 +766,8 @@ const FRAGMENT_COLOR = `
     diffuseColor.rgb *= mix(vec3(1.0), vec3(1.03, 0.72, 0.75), squeeze * 0.8) * mix(vec3(1.0), vec3(1.05, 0.95, 0.94), swell * 0.5);
   }
 `;
+
+export const PRINT_KIND = { tool: 0, paddle: 1, kiss: 2 };
 
 const PRINT_SHAPES = {
   hand: {
@@ -983,6 +1015,84 @@ function sampleTexture(map) {
   };
 }
 
+function computeStretch(geometry) {
+  const pos = geometry.attributes.position;
+  const { uv } = geometry.attributes;
+  const plant = geometry.attributes.plant?.array;
+  const stretch = new Float32Array(pos.count);
+  if (uv) {
+    const index = geometry.index.array;
+    const slots = new Map();
+    const slotOf = new Uint32Array(pos.count);
+    for (let i = 0; i < pos.count; i += 1) {
+      const key = `${pos.getX(i).toFixed(5)},${pos.getY(i).toFixed(5)},${pos.getZ(i).toFixed(5)}`;
+      if (!slots.has(key)) slots.set(key, slots.size);
+      slotOf[i] = slots.get(key);
+    }
+    const worst = new Float32Array(slots.size);
+    const a = new Vector3();
+    const e1 = new Vector3();
+    const e2 = new Vector3();
+    const tu = new Vector3();
+    const tv = new Vector3();
+    for (let t = 0; t < index.length; t += 3) {
+      const [i, j, k] = [index[t], index[t + 1], index[t + 2]];
+      a.fromBufferAttribute(pos, i);
+      e1.fromBufferAttribute(pos, j).sub(a);
+      e2.fromBufferAttribute(pos, k).sub(a);
+      const du1 = uv.getX(j) - uv.getX(i);
+      const dv1 = uv.getY(j) - uv.getY(i);
+      const du2 = uv.getX(k) - uv.getX(i);
+      const dv2 = uv.getY(k) - uv.getY(i);
+      const det = du1 * dv2 - du2 * dv1;
+      if (Math.abs(det) > 1e-12) {
+        tu.copy(e1)
+          .multiplyScalar(dv2)
+          .addScaledVector(e2, -dv1)
+          .divideScalar(det);
+        tv.copy(e2)
+          .multiplyScalar(du1)
+          .addScaledVector(e1, -du2)
+          .divideScalar(det);
+        const p = tu.lengthSq();
+        const q = tu.dot(tv);
+        const r = tv.lengthSq();
+        const spread = Math.sqrt(((p - r) / 2) ** 2 + q * q);
+        const ratio = Math.sqrt(
+          ((p + r) / 2 + spread) / Math.max(1e-12, (p + r) / 2 - spread),
+        );
+        [i, j, k].forEach((v) => {
+          worst[slotOf[v]] = Math.max(worst[slotOf[v]], ratio);
+        });
+      }
+    }
+    let mask = worst.map((w) => Math.min(1, Math.max(0, (w - 1.08) / 0.2)));
+    for (let pass = 0; pass < 6; pass += 1) {
+      const sums = new Float32Array(slots.size);
+      const counts = new Uint16Array(slots.size);
+      const peaks = Float32Array.from(mask);
+      for (let f = 0; f < index.length; f += 3) {
+        for (let k = 0; k < 3; k += 1) {
+          const p = slotOf[index[f + k]];
+          const q = slotOf[index[f + ((k + 1) % 3)]];
+          sums[p] += mask[q];
+          sums[q] += mask[p];
+          counts[p] += 1;
+          counts[q] += 1;
+          peaks[p] = Math.max(peaks[p], mask[q]);
+          peaks[q] = Math.max(peaks[q], mask[p]);
+        }
+      }
+      mask =
+        pass < 3 ? peaks : sums.map((s, n) => (counts[n] ? s / counts[n] : 0));
+    }
+    for (let i = 0; i < pos.count; i += 1) {
+      stretch[i] = plant?.[i] > 0.5 ? 0 : mask[slotOf[i]];
+    }
+  }
+  geometry.setAttribute("stretch", new BufferAttribute(stretch, 1));
+}
+
 function computeStiffness(geometry, map, stemY) {
   const pos = geometry.attributes.position;
   const { uv } = geometry.attributes;
@@ -1151,6 +1261,9 @@ export class Peach {
       uPrintUps: { value: this.emptySlots(PEACH_CONFIG.MAX_PRINTS) },
       uPrintDefinitions: { value: new Array(PEACH_CONFIG.MAX_PRINTS).fill(0) },
       uPrintTexture: { value: null },
+      uPaddleTexture: { value: null },
+      uKissTexture: { value: null },
+      uPrintKind: { value: new Array(PEACH_CONFIG.MAX_PRINTS).fill(0) },
       uPrintInk: { value: 0 },
       uGrab: { value: new Vector4(0, 0, 0, 1) },
       uGrabPull: { value: new Vector4() },
@@ -1183,6 +1296,7 @@ export class Peach {
     };
     this.printTextures = {};
     this.setTool("hand");
+    this.uniforms.uKissTexture.value = drawPrint(PRINT_SHAPES.lips);
     this.uniforms.uCutPlane = { value: this.uniforms.uCrease.value };
     this.uniforms.uCutSide = { value: 0 };
     this.uniforms.uStemY = { value: 1e4 };
@@ -1260,6 +1374,7 @@ export class Peach {
       if (stemBase.leafAxis)
         this.uniforms.uLeafAxis.value.set(...stemBase.leafAxis.toArray(), 0);
     }
+    computeStretch(mesh.geometry);
     const fuzz = generateFuzzNormalMap();
     this.material = new MeshPhysicalMaterial({
       map,
@@ -1309,7 +1424,7 @@ export class Peach {
         )
         .replace(
           "#include <normal_fragment_maps>",
-          "vec3 oilBase = normal;\n#include <normal_fragment_maps>\nif (uSkinPattern.x > 0.5 && uSkinPattern.x < 1.5) {\n  float facing = clamp(dot(oilBase, normalize(vViewPosition)), 0.0, 1.0);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSkinDeep, smoothstep(0.05, 1.0, facing) * uSkinPattern.y * (1.0 - leaf));\n}\nif (uSkinPattern.x > 1.5) {\n  vec3 honeyNormal = oilBump(-vViewPosition, oilBase, skinHoneyHeight * uOilDepth * 0.6, faceDirection);\n  normal = normalize(mix(normal, honeyNormal, skinHoney));\n}\nif (oilSpot > 0.0) {\n  vec3 oilNormal = oilBump(-vViewPosition, oilBase, oilHeight * uOilDepth, faceDirection);\n  normal = normalize(mix(normal, oilNormal, oilSpot));\n}",
+          `vec3 oilBase = normal;\n#include <normal_fragment_maps>\n${HOLE_FUZZ}\nif (uSkinPattern.x > 0.5 && uSkinPattern.x < 1.5) {\n  float facing = clamp(dot(oilBase, normalize(vViewPosition)), 0.0, 1.0);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSkinDeep, smoothstep(0.05, 1.0, facing) * uSkinPattern.y * (1.0 - leaf));\n}\nif (uSkinPattern.x > 1.5) {\n  vec3 honeyNormal = oilBump(-vViewPosition, oilBase, skinHoneyHeight * uOilDepth * 0.6, faceDirection);\n  normal = normalize(mix(normal, honeyNormal, skinHoney));\n}\nif (oilSpot > 0.0) {\n  vec3 oilNormal = oilBump(-vViewPosition, oilBase, oilHeight * uOilDepth, faceDirection);\n  normal = normalize(mix(normal, oilNormal, oilSpot));\n}`,
         )
         .replace(
           "#include <opaque_fragment>",
@@ -2123,6 +2238,7 @@ export class Peach {
       radius / scale,
     );
     this.lastHitTime = now;
+    this.onJiggle?.(worldPoint, baseAmplitude, baseRadius);
   }
 
   setTool(name) {
@@ -2132,6 +2248,11 @@ export class Peach {
     this.uniforms.uPrintTexture.value = this.printTextures[name];
     this.uniforms.uPrintInk.value = name === "lips" ? 1 : 0;
     this.uniforms.uPrints.value.forEach((v) => v.setW(-1e4));
+  }
+
+  setPaddlePrint(key, shape) {
+    this.printTextures[key] = this.printTextures[key] || drawPrint(shape);
+    this.uniforms.uPaddleTexture.value = this.printTextures[key];
   }
 
   setGrab(localPoint, localPull, radius, localDent, dentRadius) {
@@ -2163,6 +2284,7 @@ export class Peach {
     strength,
     definition,
     printSize,
+    kind = 0,
   ) {
     if (!this.mesh) return;
     const slot = this.printSlot;
@@ -2185,6 +2307,7 @@ export class Peach {
     );
     this.uniforms.uPrintNormals.value[slot].set(n.x, n.y, n.z, strength);
     this.uniforms.uPrintDefinitions.value[slot] = definition;
+    this.uniforms.uPrintKind.value[slot] = kind;
     this.uniforms.uPrintUps.value[slot].set(up.x, up.y, up.z, size);
   }
 

@@ -162,6 +162,7 @@ export class IdleGame {
     if (edged) s.seen.edged = true;
     this.gain(value, "burst");
     this.pendingBurst = { value, pits, lucky };
+    this.emit("split", this.pendingBurst);
   }
 
   popAtPeach(value, kind) {
@@ -227,7 +228,13 @@ export class IdleGame {
     if (pouring && !this.pouring) s.stats.pours += 1;
     this.pouring = pouring;
 
-    if (m.autoHeat > 0 && m.helperJps > 0 && live && m.heatCap >= 100) {
+    if (
+      m.autoHeat > 0 &&
+      m.helperJps > 0 &&
+      live &&
+      m.heatCap >= 100 &&
+      !i.helpersHold
+    ) {
       i.addHeat(m.autoHeat * dt);
       if (i.heat >= 100) i.charge();
     }
