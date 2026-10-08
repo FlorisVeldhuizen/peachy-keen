@@ -8,6 +8,7 @@ const TOP_FROM = 0.15;
 const TOP_RAMP = 0.2;
 const SETTLE_FREQUENCY = 17;
 const SETTLE_DAMPING = 0.55;
+const ARRIVE_SECONDS = 1.3;
 
 export class Layout {
   constructor(camera, panel) {
@@ -34,6 +35,16 @@ export class Layout {
     const h = viewHeight();
     const opened = clamp((this.bottom - h * TOP_FROM) / (h * TOP_RAMP), 0, 1);
     this.top = opened * this.rate.getBoundingClientRect().bottom;
+  }
+
+  settled() {
+    const [z, x, y] = this.shown;
+    return (
+      !this.arrive &&
+      Math.abs(z.value - this.targetZ) < 0.01 &&
+      Math.abs(x.value - this.side / 2) < 0.5 &&
+      Math.abs(y.value - (this.frameBottom() - this.top) / 2) < 0.5
+    );
   }
 
   // A sheet pulled past its open height covers the peach, so the peach stays framed for the open sheet.
@@ -65,8 +76,22 @@ export class Layout {
     );
     const z = worldH / 2 / Math.tan(halfFov);
     const targets = [z, this.side / 2, (bottom - this.top) / 2];
-    const snap = this.targetZ === null || !delta;
-    const [shownZ, shownX, shownY] = targets.map((t, i) =>
+    if (this.targetZ === null) {
+      // Starts from the full-screen framing the intro used, so the shop eases in.
+      this.arrive = { from: [cam.userData.baseZ ?? z, 0, 0], t: 0 };
+      this.targetZ = z;
+    }
+    let shownTargets = targets;
+    if (this.arrive) {
+      this.arrive.t = Math.min(1, this.arrive.t + delta / ARRIVE_SECONDS);
+      const { t } = this.arrive;
+      const k = t * t * t * (t * (t * 6 - 15) + 10);
+      const { from } = this.arrive;
+      shownTargets = targets.map((t, i) => from[i] + (t - from[i]) * k);
+      if (this.arrive.t >= 1) this.arrive = null;
+    }
+    const snap = !delta || this.arrive;
+    const [shownZ, shownX, shownY] = shownTargets.map((t, i) =>
       snap ? this.shown[i].snap(t) : this.shown[i].step(t, delta),
     );
     this.growth = snap ? 0 : (this.targetZ - z) / (z * delta);
@@ -89,6 +114,8 @@ export class Layout {
       const root = document.documentElement.style;
       root.setProperty("--panel-side", `${this.side}px`);
       root.setProperty("--panel-bottom", `${this.bottom}px`);
+      const [closed] = this.panel.sheetStops();
+      root.setProperty("--sheet-shown", clamp(this.bottom / closed, 0, 1));
     }
   }
 }

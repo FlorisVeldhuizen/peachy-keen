@@ -124,7 +124,11 @@ export class Interaction {
     this.phaseTime = 0;
     this.clock = 0;
     this.sway = 0;
-    this.swayRate = 1;
+    this.swayRate = 0;
+    // The intro outline is drawn from the rest pose, so the peach stays put until it fades.
+    this.holdStill = true;
+    this.swayWake = 0;
+    this.swayAmount = 0;
     this.idle = 0;
     this.twerk = null;
 
@@ -362,8 +366,21 @@ export class Interaction {
     this.wake();
   }
 
-  begin() {
-    this.enter();
+  // Starts from the peach already on screen, so its pose carries on instead of snapping to rest.
+  begin(squash = 1.6) {
+    this.group.visible = true;
+    this.idle = 0;
+    this.dressUp();
+    this.phaseTime = 0;
+    this.phase = "live";
+    this.squashVelocity.x += squash;
+    this.squashAxis.set(0, 1);
+  }
+
+  nudge(size = 1) {
+    this.squashVelocity.x += 0.7 * size;
+    this.squashAxis.set(0, 1);
+    this.spin.z += (Math.random() - 0.5) * 0.5 * size;
   }
 
   timeScale(realDelta) {
@@ -2106,6 +2123,11 @@ export class Interaction {
     const held =
       !this.carrying &&
       (this.grab || this.recoil || (p.pressed && p.downOnPeach && !p.rubbing));
+    // Holding still eases the sway back to the rest pose; letting go grows it again over two seconds.
+    this.swayWake = this.holdStill
+      ? Math.max(0, this.swayWake - delta / 0.4)
+      : Math.min(1, this.swayWake + delta / 2);
+    this.swayAmount = this.swayWake * this.swayWake * (3 - 2 * this.swayWake);
     this.swayRate +=
       ((held ? 0 : 1) - this.swayRate) * (1 - Math.exp(-delta * 8));
     this.sway += delta * this.swayRate;
@@ -2163,12 +2185,16 @@ export class Interaction {
     const { pose, sway } = this;
     g.position.set(
       this.offset.x + pose.x,
-      this.offset.y + Math.sin(sway * 1.4) * 0.12 * calm + pose.lift,
+      this.offset.y +
+        Math.sin(sway * 1.4) * 0.12 * calm * this.swayAmount +
+        pose.lift,
       this.offset.z,
     );
     g.rotation.set(
       this.tilt.x,
-      Math.sin(sway * 0.45) * 0.25 * calm + this.tilt.y + pose.yaw,
+      Math.sin(sway * 0.45) * 0.25 * calm * this.swayAmount +
+        this.tilt.y +
+        pose.yaw,
       this.tilt.z + Math.sin(t * 43) * tremble + pose.roll,
     );
 
@@ -2195,8 +2221,9 @@ export class Interaction {
   updateCamera(delta) {
     const still = reducedMotion.matches;
     const p = this.pointer;
-    const tx = still || !p.present ? 0 : (p.x / window.innerWidth - 0.5) * 0.5;
-    const ty = still || !p.present ? 0 : (p.y / viewHeight() - 0.5) * -0.3;
+    const steady = still || !p.present || this.holdStill;
+    const tx = steady ? 0 : (p.x / window.innerWidth - 0.5) * 0.5;
+    const ty = steady ? 0 : (p.y / viewHeight() - 0.5) * -0.3;
     const ease = 1 - Math.exp(-delta * 3);
     this.parallax.x += (tx - this.parallax.x) * ease;
     this.parallax.y += (ty - this.parallax.y) * ease;
