@@ -856,14 +856,6 @@ body.is-storm::after {
   height: 14px;
 }
 
-.seed-balance {
-  margin-bottom: 8px;
-  color: var(--blush);
-  font-size: 17px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .seeds {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
@@ -1007,6 +999,7 @@ body.is-storm::after {
   border: 1px solid var(--harvest);
   border-radius: 9px;
   pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 .plot[data-stage="5"] {
@@ -1038,6 +1031,37 @@ body.is-storm::after {
 
 .plot.is-armed .growth {
   filter: grayscale(0.75) brightness(0.55);
+}
+
+.plot-block {
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  z-index: 4;
+  width: clamp(24px, 27%, 36px);
+  aspect-ratio: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.6);
+  transition:
+    opacity 0.15s ease,
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.plot.is-drop-blocked .plot-block {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.plus-face.is-block {
+  background: #d98a94;
+}
+
+.plot .plus-face.is-block svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
 }
 
 .plot-x {
@@ -1188,7 +1212,16 @@ body.is-storm::after {
 }
 
 .plot.is-drop-blocked {
-  border-color: rgba(217, 138, 148, 0.8);
+  border-color: #d98a94;
+  box-shadow:
+    0 0 0 1px #d98a94,
+    0 0 18px rgba(217, 138, 148, 0.3);
+}
+
+.plot.is-drop-blocked::before,
+.plot.is-drop-blocked .plot-label,
+.plot.is-drop-blocked > svg {
+  opacity: 0;
 }
 
 .plot.is-drop-blocked .growth {
@@ -1214,12 +1247,8 @@ body.is-storm::after {
   pointer-events: none;
   transition:
     filter 0.2s ease,
+    opacity 0.2s ease,
     scale 0.2s ease;
-}
-
-.seed-ghost.is-blocked {
-  filter: grayscale(0.8) brightness(0.8);
-  scale: 0.8;
 }
 
 .seed-ghost.is-3d {
@@ -1231,6 +1260,12 @@ body.is-storm::after {
   box-shadow: none;
   filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5));
   scale: 1.1;
+}
+
+.seed-ghost.is-blocked {
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)) saturate(0.6);
+  opacity: 0.35;
+  scale: 0.85;
 }
 
 .harvest-layer,
@@ -2641,7 +2676,7 @@ body.is-storm::after {
   }
 
   .panel.is-full {
-    height: calc(var(--view-h) - var(--edge-top) - 64px);
+    height: calc(var(--view-h) - var(--edge-top) - var(--score-peek, 64px));
   }
 
   .panel.is-released {
