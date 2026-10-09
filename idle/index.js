@@ -12,9 +12,11 @@ import { showHarvests } from "./harvest";
 import { Layout } from "./layout";
 import { applySkin, switchSkin, SKIN_NAMES } from "./skins";
 import { Toys } from "./toys";
+import { Privacy } from "./privacy";
 import { preparePage } from "./page";
 import { awayMessage } from "./away";
 import { HELPERS } from "./data/helpers";
+import { bottleEarned, rubLearned } from "./data/cravings";
 import { TREE_BY_ID } from "./data/tree";
 import { format } from "./numbers";
 import { playDing, playBuy, playNotes } from "../audio";
@@ -42,6 +44,7 @@ export function createIdle({
   lens,
   juice,
   droplets,
+  privacyTag,
 }) {
   preparePage();
   interaction.ui.scoreboard = false;
@@ -94,6 +97,15 @@ export function createIdle({
     room.setActive(wanted === "room");
   };
   const toys = new Toys(game, settings);
+  const privacy = new Privacy({
+    game,
+    settings,
+    panel,
+    room,
+    talk,
+    popups,
+    tag: privacyTag,
+  });
   showHarvests(game, hud);
   let started = false;
   let skin = null;
@@ -122,6 +134,39 @@ export function createIdle({
       buttons: [{ label: "Thanks, helpers", primary: true }],
     });
   };
+
+  const { bottle, ui } = interaction;
+  const showBottleUi = (shown) => {
+    bottle.el.style.visibility = shown ? "" : "hidden";
+    ui.hintRub.hidden = !shown;
+  };
+  const showBottle = (shown) => {
+    bottle.view.group.visible = shown;
+    showBottleUi(shown);
+  };
+  const showMassageHint = () => {
+    const s = game.state;
+    ui.hintMassage.hidden = !bottleEarned(s) || rubLearned(s);
+    ui.hintMassage.classList.remove("is-learned");
+  };
+  // The second peach brings the bottle, so it never crowds the busy run up to the first split.
+  const revealBottle = () => {
+    const s = game.state;
+    if (bottle.view.group.visible || s.stats.bursts < 1) return;
+    if (interaction.phase !== "live" || interaction.heat < 50) return;
+    s.seen.bottle = true;
+    showBottle(true);
+    bottle.screen.x -= 220;
+    showMassageHint();
+  };
+  const fadeMassageHint = () => {
+    if (ui.hintMassage.hidden || !rubLearned(game.state)) return;
+    ui.hintMassage.classList.add("is-learned");
+  };
+  game.on("replace", () => {
+    showBottle(bottleEarned(game.state));
+    showMassageHint();
+  });
 
   game.on("pop", ({ x, y, value, kind }) => {
     if (!(value > 0)) return;
@@ -239,7 +284,9 @@ export function createIdle({
     popups.toast(
       "New toy",
       toy.name,
-      "It's on now. Switch it off in Options.",
+      toy.cord
+        ? "Tap the tag to send it up. Pull it down to hang it again."
+        : "It's on now. Switch it off in Options.",
       "seed",
     ),
   );
@@ -313,6 +360,7 @@ export function createIdle({
 
   return {
     room,
+    warmFade: (warm) => privacy.warmFade(warm),
     prepare() {
       golden.warmup(peach);
       peach.prepareSkinFade();
@@ -324,9 +372,13 @@ export function createIdle({
       syncStyle();
       syncSkin();
       toys.sync();
+      showBottleUi(bottleEarned(game.state));
+      showMassageHint();
     },
-    begin() {
+    bottleEarned: () => bottleEarned(game.state),
+    begin(free) {
       started = true;
+      privacy.start(free);
       panel.slide(true);
       if (game.away) addAway(game.away);
       game.away = null;
@@ -340,6 +392,10 @@ export function createIdle({
         await new Promise(requestAnimationFrame);
     },
     frame(realDelta) {
+      if (started) {
+        revealBottle();
+        fadeMassageHint();
+      }
       layout.update(realDelta);
       squashWithSheet(realDelta);
     },
@@ -351,8 +407,12 @@ export function createIdle({
       panel.update(realDelta);
       renders.update();
       if (!started) return;
+      golden.paused = privacy.shown;
       golden.update(realDelta);
+      privacy.update(realDelta);
+      privacy.restoreFade();
       room.update(realDelta);
+      privacy.applyFade();
     },
   };
 }
