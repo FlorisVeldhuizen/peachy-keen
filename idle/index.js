@@ -359,7 +359,17 @@ export function createIdle({
     };
 
   return {
+    // 0 closed, 1 open, 2 open at full height.
+    shop: () => (panel.open ? 1 + panel.root.classList.contains("is-full") : 0),
     room,
+    lightStates() {
+      const { state } = game;
+      const states = [];
+      if (state.toys.includes("mood") || state.helpers.cult > 0)
+        states.push([true, false]);
+      if (state.toys.includes("disco")) states.push([false, true]);
+      return states;
+    },
     warmFade: (warm) => privacy.warmFade(warm),
     prepare() {
       golden.warmup(peach);

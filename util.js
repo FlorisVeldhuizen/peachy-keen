@@ -81,3 +81,10 @@ measureViewport();
 settleViewport();
 
 export const viewHeight = () => viewportHeight;
+// Reading innerWidth forces a layout, so frame code reads this copy.
+export const viewWidth = () => viewportWidth;
+
+export const sheet = { top: null, side: 0, moved: 0 };
+
+// Light combinations whose shaders are built: 1 = mood lights, 2 = disco lights, summed.
+export const warmedLights = new Set();
