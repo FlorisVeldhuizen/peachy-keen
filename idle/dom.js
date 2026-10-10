@@ -113,12 +113,20 @@ export function slideOn(track, pick, preview = () => {}) {
   let slidAt = -1e9;
   const n = () => Number(track.style.getPropertyValue("--n")) || 1;
   track.addEventListener("pointerdown", (e) => {
-    if (e.isPrimary) drag = { x: e.clientX, id: e.pointerId, moved: false };
+    if (!e.isPrimary) return;
+    const from = Number(track.style.getPropertyValue("--i"));
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false, from };
   });
   track.addEventListener("pointermove", (e) => {
     if (!drag) return;
     if (!drag.moved) {
-      if (Math.abs(e.clientX - drag.x) < 6) return;
+      const dx = Math.abs(e.clientX - drag.x);
+      const dy = Math.abs(e.clientY - drag.y);
+      if (dx < 6 && dy < 6) return;
+      if (dy >= dx) {
+        drag = null;
+        return;
+      }
       drag.moved = true;
       track.setPointerCapture(drag.id);
       track.classList.add("is-sliding");
@@ -129,13 +137,19 @@ export function slideOn(track, pick, preview = () => {}) {
     track.style.setProperty("--i", i);
     light(Math.round(i));
   });
-  const end = () => {
+  const end = (e) => {
     if (!drag) return;
-    const { moved } = drag;
+    const { moved, from } = drag;
     drag = null;
     if (!moved) return;
     slidAt = performance.now();
     track.classList.remove("is-sliding");
+    if (e.type === "pointercancel") {
+      lit = -1;
+      track.style.setProperty("--i", from);
+      preview(from);
+      return;
+    }
     const k = Math.round(Number(track.style.getPropertyValue("--i")));
     track.style.setProperty("--i", k);
     light(-1);
@@ -143,6 +157,13 @@ export function slideOn(track, pick, preview = () => {}) {
   };
   track.addEventListener("pointerup", end);
   track.addEventListener("pointercancel", end);
+  track.addEventListener(
+    "touchmove",
+    (e) => {
+      if (drag?.moved) e.preventDefault();
+    },
+    { passive: false },
+  );
   track.addEventListener(
     "click",
     (e) => {

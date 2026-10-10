@@ -496,7 +496,7 @@ body.is-storm::after {
 
 .shop-detail {
   position: sticky;
-  bottom: -28px;
+  bottom: 0;
   display: grid;
   gap: 4px;
   margin-top: 14px;

@@ -10,8 +10,9 @@ function motionAt(m, time) {
 }
 
 export class HintDrop {
-  constructor(hints) {
+  constructor(hints, gap) {
     this.hints = hints;
+    this.gap = gap;
     this.lines = [...hints.querySelectorAll("p")];
     this.time = 0;
     this.lineMotions = this.lines.map(() => ({ from: 0, to: 0, start: 0 }));
@@ -36,26 +37,27 @@ export class HintDrop {
       heights.reduce((sum, h, j) => (j > i && learned[j] ? sum + h : sum), 0),
     );
     const drop = heights.reduce((sum, h, j) => (learned[j] ? sum + h : sum), 0);
-    return { shifts, drop };
+    const bottle = learned.every(Boolean) ? drop : drop - this.gap;
+    return { shifts, bottle };
   }
 
   settle() {
-    const { shifts, drop } = this.targets();
+    const { shifts, bottle } = this.targets();
     this.lineMotions.forEach((m, i) =>
       Object.assign(m, { from: shifts[i], to: shifts[i], start: -Infinity }),
     );
-    Object.assign(this.bottle, { from: drop, to: drop, start: -Infinity });
-    this.bottleAt = drop;
+    Object.assign(this.bottle, { from: bottle, to: bottle, start: -Infinity });
+    this.bottleAt = bottle;
     this.render();
   }
 
   update(delta) {
     this.time += delta;
-    const { shifts, drop } = this.targets();
+    const { shifts, bottle } = this.targets();
     this.lineMotions.forEach((m, i) => {
       if (shifts[i] !== m.to) this.retarget(m, shifts[i]);
     });
-    if (drop !== this.bottle.to) this.retarget(this.bottle, drop);
+    if (bottle !== this.bottle.to) this.retarget(this.bottle, bottle);
     this.bottleAt = motionAt(this.bottle, this.time);
     this.render();
   }

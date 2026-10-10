@@ -782,7 +782,7 @@ peach
     };
 
     boot.ready();
-    sayWords([readyText()]);
+    sayNow(readyText());
     intro.classList.add("is-ready");
     interaction.nudge(1.4);
     const invite = setInterval(() => {
@@ -923,6 +923,6 @@ boot.booted();
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/peachy-keen/sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }

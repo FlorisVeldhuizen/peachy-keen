@@ -17,7 +17,7 @@ import {
 const PEACH_HEIGHT = 3.2;
 const HEIGHT_TO_PEACH = 0.28;
 const WIDTH_TO_HEIGHT = 0.52;
-const HINT_GAP_PX = 24;
+const HINT_GAP_PX = 16;
 const CATCH_PX = 48;
 const BASE_Y = -0.5;
 const SQUASH_PER_GROWTH = 0.012;
@@ -228,7 +228,7 @@ export class Bottle {
       this.hovered = false;
     });
     this.hints = document.querySelector(".hints");
-    this.hintDrop = new HintDrop(this.hints);
+    this.hintDrop = new HintDrop(this.hints, HINT_GAP_PX);
     // Layout reads force a layout, so they are redone only after the hints or the sheet moved.
     this.placed = null;
     new ResizeObserver(() => {
@@ -262,19 +262,14 @@ export class Bottle {
     const height = this.followSize(delta);
     if (delta === undefined) this.hintDrop.settle();
     else this.hintDrop.update(delta);
-    const drop = this.hintDrop.bottleAt;
     if (this.placed?.moved !== sheet.moved)
       this.placed = {
         moved: sheet.moved,
-        hintsHeight: this.hints.offsetHeight,
         hintsTop: this.hints.offsetTop,
         left: this.el.offsetLeft,
       };
-    const { hintsHeight, hintsTop, left } = this.placed;
-    const shown = hintsHeight - drop;
-    const line = Math.min(...this.hintDrop.heights);
-    const gap = HINT_GAP_PX * clamp(shown / line, 0, 1);
-    const rest = hintsTop + drop - gap;
+    const { hintsTop, left } = this.placed;
+    const rest = hintsTop + this.hintDrop.bottleAt;
     // The shop sheet pushes the bottle up when it rises past it, and lets it back down as it falls.
     const sheetTop = sheet.top ?? viewHeight();
     const bottom = softMin(rest, sheetTop - left, CATCH_PX);

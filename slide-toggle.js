@@ -31,6 +31,7 @@ export default function slideToggle(group) {
 
   let pointer = -1;
   let startX = 0;
+  let startY = 0;
   let startLeft = 0;
   let dragging = false;
   let swallowClick = false;
@@ -39,6 +40,7 @@ export default function slideToggle(group) {
     swallowClick = false;
     pointer = e.pointerId;
     startX = e.clientX;
+    startY = e.clientY;
     startLeft = thumb.offsetLeft;
     dragging = false;
   });
@@ -49,7 +51,13 @@ export default function slideToggle(group) {
       return;
     }
     if (!dragging) {
-      if (Math.abs(e.clientX - startX) < 6) return;
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+      if (dx < 6 && dy < 6) return;
+      if (dy >= dx) {
+        pointer = -1;
+        return;
+      }
       dragging = true;
       group.setPointerCapture(pointer);
       thumb.style.transition = "none";
@@ -67,6 +75,10 @@ export default function slideToggle(group) {
     if (!dragging) return;
     dragging = false;
     thumb.style.transition = "";
+    if (e.type === "pointercancel") {
+      sync();
+      return;
+    }
     const centre = thumb.offsetLeft + thumb.offsetWidth / 2;
     const nearest = options().reduce((best, b) =>
       Math.abs(b.offsetLeft + b.offsetWidth / 2 - centre) <
@@ -81,6 +93,13 @@ export default function slideToggle(group) {
   };
   group.addEventListener("pointerup", endDrag);
   group.addEventListener("pointercancel", endDrag);
+  group.addEventListener(
+    "touchmove",
+    (e) => {
+      if (dragging) e.preventDefault();
+    },
+    { passive: false },
+  );
   group.addEventListener(
     "click",
     (e) => {

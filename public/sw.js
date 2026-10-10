@@ -1,8 +1,10 @@
 // Bump on a release that has to drop everything the browser is holding; hashed asset names cover the rest.
 const CACHE = "peachy-keen-v3";
 
+const PAGE = self.registration.scope;
+
 const SHELL = [
-  "/peachy-keen/",
+  PAGE,
   "/peachy-keen/manifest.webmanifest",
   "/peachy-keen/icon-192.png",
   "/peachy-keen/icon-512.png",
@@ -43,7 +45,7 @@ async function freshFirst(request) {
   } catch {
     return (
       (await cache.match(request)) ||
-      (await cache.match("/peachy-keen/")) ||
+      (await cache.match(PAGE)) ||
       Response.error()
     );
   }
