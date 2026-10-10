@@ -17,6 +17,8 @@ import { keepAudioUnlocked, loadSounds, setMuted, playLensHit } from "./audio";
 import {
   reducedMotion,
   warmedLights,
+  lightGroups,
+  lightIndex,
   sheet,
   viewHeight,
   viewWidth,
@@ -30,8 +32,8 @@ import { stepFill, drawFill } from "./fill-wave";
 const MODE_KEY = "peachy-keen-mode";
 const MODES = ["idle", "free"];
 const SHAPE_FADE_MS = 350;
-// Each step's share of the fill: shape download, skin download, building and warming the scene.
-const LOAD_SHARE = { shape: 0.4, skin: 0.25, prepare: 0.35 };
+// Each step's share of the fill: shape download, skin download, building and warming the scene, building the helpers.
+const LOAD_SHARE = { shape: 0.4, skin: 0.25, prepare: 0.25, helpers: 0.1 };
 
 const intro = document.getElementById("intro");
 const introTitle = new IntroTitle(document.getElementById("intro-title"));
@@ -188,7 +190,7 @@ settings.applyAll();
 let idle = null;
 let idleActive = false;
 
-const loaded = { shape: 0, skin: 0, prepare: 0 };
+const loaded = { shape: 0, skin: 0, prepare: 0, helpers: 0 };
 const loadedShare = () =>
   Object.keys(LOAD_SHARE).reduce(
     (sum, k) => sum + LOAD_SHARE[k] * loaded[k],
@@ -350,10 +352,9 @@ function drawEverything() {
 }
 
 // Every lit pixel pays for each visible light, so lights that are off stay out of the shaders.
-const lightGroups = [[mood.candle, mood.halo], wild.disco.lights];
-const lightIndex = (shown) => (shown[0] ? 1 : 0) + (shown[1] ? 2 : 0);
+lightGroups.push([mood.candle, mood.halo], wild.disco.lights, []);
 // Each light combination is its own shader variant; unwarmed ones fall back to all lights on.
-const ALL_LIGHTS = [true, true];
+const ALL_LIGHTS = [true, true, true];
 let warmExtra = [];
 const showLights = (shown) =>
   lightGroups.forEach((members, n) =>
@@ -362,7 +363,7 @@ const showLights = (shown) =>
       light.visible = shown[n];
     }),
   );
-const lightsShown = [false, false];
+const lightsShown = [false, false, false];
 const showLitGroups = () => {
   lightGroups.forEach((members, n) => {
     lightsShown[n] = members.some((light) => light.intensity > 0);
@@ -398,7 +399,14 @@ async function warmLights(shown) {
 async function warm(extra = warmExtra) {
   warmExtra = extra;
   warmedLights.clear();
-  const states = [ALL_LIGHTS, [false, false], ...extra];
+  // The golden glow lights only on hover, so it is warmed only with the likely mood and disco groups; other combinations fall back to all lights.
+  const glow =
+    idle && lightGroups[2].length ? [[...idle.likelyLights(), true]] : [];
+  const states = [
+    ALL_LIGHTS,
+    ...[[false, false], ...extra].map(([m, d]) => [m, d, false]),
+    ...glow,
+  ];
   for (let n = 0; n < states.length; n += 1)
     // eslint-disable-next-line no-await-in-loop
     await warmLights(states[n]);
@@ -435,6 +443,7 @@ async function prepareIdle() {
     privacyTag,
   });
   naughty.set("achievements", false);
+  lightGroups[2].push(idle.glow);
   idle.prepare();
   await warm(idle.lightStates());
   await idle.warmFade(warm);
@@ -527,8 +536,16 @@ peach
       onRipe = resolve;
     });
     peach.applySkin(await skinImage);
+    peach.planPlant();
     loaded.skin = 1;
+    // Helpers bake from the full skin, so they build during the ripening fill; the tap waits for them.
+    const settled = idle
+      .settle((fraction) => {
+        loaded.helpers = fraction;
+      })
+      .then(drawEverything);
     await ripe;
+    await settled;
     juice.clear();
     loadSounds();
     keepAudioUnlocked();
@@ -588,6 +605,7 @@ const clipBox = new Vector4();
 // With the shop open and nothing being touched, the scene draws every other frame; any touch restores full rate at once.
 const CALM_AFTER = 1;
 let calmFor = 0;
+let calmShop = 0;
 let skipFrame = false;
 let lastFrameAt = performance.now();
 const frameClip = () => {
@@ -615,7 +633,9 @@ renderer.setAnimationLoop(() => {
     interaction.phase !== "live" ||
     interaction.bottle.stream.active ||
     wild.disco.on ||
-    shock.active;
+    shock.active ||
+    shop !== calmShop;
+  calmShop = shop;
   calmFor = busy ? 0 : calmFor + gap / 1000;
   if (shop && calmFor > CALM_AFTER) {
     // Half rate reads as slow frames, so the resolution governor waits it out.
