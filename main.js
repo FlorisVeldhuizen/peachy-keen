@@ -27,13 +27,33 @@ import { PrivacyTag, freePlayOpen, openFreePlay, cordX } from "./privacy-tag";
 import IntroTitle from "./intro-title";
 import JiggleText from "./jiggle-text";
 import slideToggle from "./slide-toggle";
-import { stepFill, drawFill } from "./fill-wave";
+import Gulp from "./fill-wave";
+import IntroGlow from "./intro-glow";
 
 const MODE_KEY = "peachy-keen-mode";
 const MODES = ["idle", "free"];
 const SHAPE_FADE_MS = 350;
 // Each step's share of the fill: shape download, skin download, building and warming the scene, building the helpers.
-const LOAD_SHARE = { shape: 0.4, skin: 0.25, prepare: 0.25, helpers: 0.1 };
+const LOAD_SHARE = { shape: 0.25, skin: 0.15, prepare: 0.45, helpers: 0.15 };
+const LOADING_WORDS = {
+  shape: [
+    "Ripening",
+    "Picking the ripest one",
+    "Brushing the fuzz",
+    "Warming up in the sun",
+  ],
+  shop: [
+    "Opening the shop",
+    "Stacking the crates",
+    "Polishing the counter",
+    "Sweeping the orchard",
+  ],
+  ripen: ["Ripening", "Getting juicy", "Waking the helpers", "Almost ripe"],
+};
+// Every line stays at least LINE_MS so it can be read; a step that runs long moves on after NEXT_LINE_MS.
+const LINE_MS = 2400;
+const NEXT_LINE_MS = 3600;
+const boot = window.peachyBoot;
 
 const intro = document.getElementById("intro");
 const introTitle = new IntroTitle(document.getElementById("intro-title"));
@@ -61,13 +81,47 @@ function writeStatus(text) {
 }
 
 function setStatus(text) {
-  if (introStatus.textContent === text) return;
+  if (boot.failed || introStatus.textContent === text) return;
   writeStatus(text);
   introStatus.animate([{ opacity: 0 }, { opacity: 1 }], {
     duration: 350,
     easing: "ease-out",
   });
 }
+let words = LOADING_WORDS.shape;
+let wordAt = 0;
+let line = words[0];
+let lineAt = performance.now();
+let momentUntil = 0;
+const lineTimer = setInterval(() => {
+  const now = performance.now();
+  if (now < momentUntil) return;
+  if (words[wordAt] !== line && now - lineAt >= LINE_MS) {
+    line = words[wordAt];
+    lineAt = Infinity;
+    // Shader compiles can hold the page for seconds, so a line's time starts once it is on screen.
+    requestAnimationFrame(() => {
+      lineAt = performance.now();
+    });
+  } else if (
+    words[wordAt] === line &&
+    wordAt < words.length - 1 &&
+    now - lineAt >= NEXT_LINE_MS
+  )
+    wordAt += 1;
+  setStatus(line);
+}, 200);
+function sayWords(list) {
+  words = list;
+  wordAt = 0;
+}
+function sayNow(text) {
+  sayWords([text]);
+  line = text;
+  lineAt = performance.now();
+  setStatus(text);
+}
+
 const showText = () => intro.classList.add("has-fonts");
 document.fonts.load("italic 560 44px Fraunces").then(showText, showText);
 setTimeout(showText, 2000);
@@ -111,7 +165,7 @@ modeButtons.forEach((b) =>
     mode = picked;
     showMode();
     if (!startGame) return;
-    setStatus(readyText());
+    sayNow(readyText());
     // eslint-disable-next-line no-use-before-define
     if (!interaction.holdStill) interaction.nudge(0.6);
   }),
@@ -147,6 +201,8 @@ if (import.meta.env.DEV) window.pkTag = privacyTag;
 const mood = new MoodLight(scene, renderer, lights);
 
 const settings = new Settings();
+// From page open, so a touch while loading already starts iOS audio before the first smack.
+keepAudioUnlocked();
 
 const interaction = new Interaction({
   scene,
@@ -175,7 +231,10 @@ interaction.on("charge", () => quality.hold(4));
 const skinRings = new SkinRings(scene, interaction);
 settings.onChange = (key, value) => {
   if (key === "sound") setMuted(!value);
-  if (key === "quality") quality.setMode(value);
+  if (key === "quality") {
+    quality.setMode(value);
+    peach.setQuality(value);
+  }
   if (key === "splatter") lens.enabled = value;
   if (key === "firmness") interaction.setFirmness(value);
   if (key === "tool") interaction.setTool(value);
@@ -196,22 +255,78 @@ const loadedShare = () =>
     (sum, k) => sum + LOAD_SHARE[k] * loaded[k],
     0,
   );
-const fill = { shown: 0, motion: 0, velocity: 0, at: 0 };
+// Sent straight to the worker, so progress made between frozen frames still reaches the still.
+const setLoaded = (key, fraction) => {
+  loaded[key] = fraction;
+  // eslint-disable-next-line no-use-before-define
+  fillWorker?.postMessage({ target: loadedShare() });
+};
+const fill = {
+  shown: 0,
+  velocity: 0,
+  at: 0,
+  modes: new Array(8).fill(0),
+  span: [-0.6, 0.6],
+  stretches: 0,
+  squashes: 0,
+  kick: 0,
+  squash: 0,
+  squashVel: 0,
+  full: false,
+};
 const ripeCentre = new Vector3();
 let stillGone = false;
 let onRipe = null;
 const RIPE_RENDER = "/peachy-keen/intro-peach-ripe.webp";
+const GREY_RENDER = "/peachy-keen/intro-peach.webp";
 // The still and the live peach share one wave clock, so the wave carries on across the handover.
 const waveEpoch = performance.timeOrigin + performance.now();
 const waveTime = () =>
   (performance.timeOrigin + performance.now() - waveEpoch) / 1000;
+const calm = reducedMotion.matches ? 0.3 : 1;
+const LEAF_FILL_MS = 550;
+const HANDOVER_QUIET = 0.8;
+const RIPE_CLEAR_MS = 600;
 
+const introShape = document.getElementById("intro-shape");
 const fillCanvas = document.getElementById("intro-fill");
 const fillSize = () =>
   Math.round(fillCanvas.clientWidth * Math.min(2, devicePixelRatio));
+// Loaded as images, they share the preloads and the CSS background; the worker sits outside the service worker's scope.
+const loadStill = (url) =>
+  new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () =>
+      window.createImageBitmap
+        ? createImageBitmap(image).then(resolve, () => resolve(null))
+        : resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+const stillImages = Promise.all([
+  loadStill(RIPE_RENDER),
+  loadStill(GREY_RENDER),
+]);
+const makeCanvas = (w, h) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  return canvas;
+};
 let fillWorker = null;
 let fillContext = null;
-const ripeRender = new Image();
+let mainGulp = null;
+// Without a worker the page runs the same gulps itself; with no images it still fills, unseen.
+const startMainGulp = async (draw) => {
+  mainGulp = new Gulp({ makeCanvas, calm });
+  if (!draw) {
+    mainGulp.setImages(null, null);
+    return;
+  }
+  const [ripe, grey] = await stillImages;
+  mainGulp.setImages(ripe, grey);
+  if (mainGulp.grey) introShape.classList.add("is-filling");
+};
 if (fillCanvas.transferControlToOffscreen) {
   fillWorker = new Worker(new URL("./fill-worker.js", import.meta.url), {
     type: "module",
@@ -222,34 +337,69 @@ if (fillCanvas.transferControlToOffscreen) {
       canvas,
       size: fillSize(),
       epoch: waveEpoch,
-      image: RIPE_RENDER,
+      calm,
     },
     [canvas],
   );
-  fillWorker.onmessage = ({ data }) => Object.assign(fill, data);
+  stillImages.then((images) =>
+    fillWorker?.postMessage({ images }, images.filter(Boolean)),
+  );
+  fillWorker.onmessage = ({ data }) => {
+    if (data.painted) introShape.classList.add("is-filling");
+    else Object.assign(fill, data);
+  };
+  fillWorker.onerror = () => {
+    fillWorker = null;
+    startMainGulp(false);
+  };
   window.addEventListener("resize", () =>
     fillWorker?.postMessage({ size: fillSize() }),
   );
 } else {
   fillContext = fillCanvas.getContext("2d");
-  ripeRender.src = RIPE_RENDER;
+  startMainGulp(true);
 }
 
+// Each gulp's stretch and squash reach the live peach once it is on screen.
+let seenStretches = 0;
+let seenSquashes = 0;
+function passGulps() {
+  const live = group.visible;
+  if (fill.stretches > seenStretches) {
+    seenStretches = fill.stretches;
+    if (live) interaction.squashVelocity.x -= fill.kick * 0.3;
+  }
+  if (fill.squashes > seenSquashes) {
+    seenSquashes = fill.squashes;
+    if (live) interaction.squashVelocity.x += fill.kick;
+  }
+  if (live) interaction.squashAxis.set(0, 1);
+}
+
+let lastTarget = 0;
 function showRipeness(delta) {
   const target = loadedShare();
+  if (target !== lastTarget) {
+    lastTarget = target;
+    boot.progress();
+  }
   const time = waveTime();
   if (fillWorker) fillWorker.postMessage({ target });
-  else {
-    if (ripeRender.complete) stepFill(fill, target, delta);
+  else if (mainGulp) {
+    mainGulp.step(delta, target);
     const size = fillSize();
-    if (!stillGone && ripeRender.complete && size) {
+    if (!stillGone && fillContext && size) {
       if (fillCanvas.width !== size) {
         fillCanvas.width = size;
         fillCanvas.height = size;
       }
-      drawFill(fillContext, ripeRender, size, fill.shown, time, fill.motion);
+      mainGulp.draw(fillContext, size, time);
     }
+    Object.assign(fill, mainGulp.snapshot(), {
+      at: performance.timeOrigin + performance.now(),
+    });
   }
+  passGulps();
   // Messages arrive unevenly, so the level carries on along its last speed in between.
   const ahead = fillWorker
     ? Math.min(
@@ -260,15 +410,17 @@ function showRipeness(delta) {
         ),
       )
     : 0;
-  peach.uniforms.uRipe.value = Math.min(1, fill.shown + fill.velocity * ahead);
-  peach.uniforms.uRipeMotion.value = fill.motion;
-  peach.uniforms.uRipeTime.value = time;
+  const { uniforms } = peach;
+  uniforms.uRipe.value = Math.min(1, fill.shown + fill.velocity * ahead);
+  uniforms.uRipeModes.value = fill.modes;
+  uniforms.uRipeSpan.value.set(fill.span[0], fill.span[1]);
+  uniforms.uRipeTime.value = time;
   if (peach.mesh) {
-    const bounds = peach.uniforms.uBounds.value;
+    const bounds = uniforms.uBounds.value;
     peach.mesh.updateMatrixWorld();
     ripeCentre.set(bounds.x, bounds.y, bounds.z);
     peach.mesh.localToWorld(ripeCentre).applyMatrix4(camera.matrixWorldInverse);
-    peach.uniforms.uRipeFrame.value.set(
+    uniforms.uRipeFrame.value.set(
       -ripeCentre.z,
       bounds.w * peach.worldScale(),
       ripeCentre.y,
@@ -277,14 +429,45 @@ function showRipeness(delta) {
   if (fill.shown >= 1) onRipe?.();
 }
 
-let statusTimer = 0;
+const aura = new IntroGlow(scene, camera, viewHeight);
+aura.load();
+let fullAt = null;
+let ripeAt = null;
+let leafKicked = false;
+// Runs every frame, so the leaf and the aura finish even after the tap.
+function finishRipening() {
+  const now = performance.now();
+  if (fill.full && fullAt === null) {
+    fullAt = now;
+    // The peach holds the still's pose through loading and starts to sway once it is full.
+    interaction.holdStill = false;
+    aura.place(
+      introShape.getBoundingClientRect(),
+      group,
+      peach.uniforms.uBounds.value.w * peach.worldScale(),
+    );
+  }
+  if (fill.shown >= 1 && ripeAt === null) ripeAt = now;
+  const { uniforms } = peach;
+  if (ripeAt !== null)
+    uniforms.uRipe.value =
+      1 + 0.15 * Math.min(1, (now - ripeAt) / RIPE_CLEAR_MS);
+  const leaf = fullAt === null ? 0 : Math.min(1, (now - fullAt) / LEAF_FILL_MS);
+  uniforms.uLeafRipe.value = leaf * leaf * (3 - 2 * leaf);
+  if (leaf >= 1 && !leafKicked) {
+    leafKicked = true;
+    peach.kickLeaf(2.2 * calm);
+  }
+  aura.update(
+    fullAt === null ? -1 : (now - fullAt - LEAF_FILL_MS) / 1000,
+    group,
+  );
+}
+peach.uniforms.uLeafRipe.value = 0;
+
 function sayForAMoment(text) {
-  const before = introStatus.textContent;
   setStatus(text);
-  clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => {
-    if (!started) setStatus(before);
-  }, 1400);
+  momentUntil = performance.now() + 1400;
 }
 
 const clearColor = new Color();
@@ -373,6 +556,7 @@ const showLitGroups = () => {
   );
 };
 
+let onWarmed = null;
 async function warmLights(shown) {
   showLights(shown);
   renderer.shadowMap.enabled = true;
@@ -394,6 +578,8 @@ async function warmLights(shown) {
   // ANGLE on Metal builds a shader on its first draw, not at compile, so draw every variant into one pixel.
   drawEverything();
   warmedLights.add(lightIndex(shown));
+  boot.progress();
+  onWarmed?.();
 }
 
 async function warm(extra = warmExtra) {
@@ -421,8 +607,7 @@ renderer.domElement.addEventListener("webglcontextrestored", async () => {
 
 // Building the shop and compiling its shaders freezes the page, so it happens before the tap.
 async function prepareIdle() {
-  const status = introStatus.textContent;
-  setStatus("Opening the shop");
+  sayWords(LOADING_WORDS.shop);
   const { createIdle } = await import("./idle");
   idle = createIdle({
     interaction,
@@ -445,10 +630,18 @@ async function prepareIdle() {
   naughty.set("achievements", false);
   lightGroups[2].push(idle.glow);
   idle.prepare();
+  setLoaded("prepare", 0.1);
+  // Each light state compiles twice, plain and with the shop's fade; reporting each one keeps the gulps coming.
+  const compiles = 2 * (3 + idle.lightStates().length);
+  let compiled = 0;
+  onWarmed = () => {
+    compiled += 1;
+    setLoaded("prepare", Math.min(0.95, 0.1 + (0.85 * compiled) / compiles));
+  };
   await warm(idle.lightStates());
   await idle.warmFade(warm);
+  onWarmed = null;
   idle.ready();
-  setStatus(status);
 }
 
 const HUD = [".score", ".hints", ".settings-dock", ".bottle"];
@@ -512,49 +705,55 @@ intro.addEventListener("click", (e) => {
 });
 
 const skinImage = Peach.fetchSkin((fraction) => {
-  loaded.skin = fraction;
+  setLoaded("skin", fraction);
 });
 peach
   .load((fraction) => {
-    loaded.shape = fraction;
+    setLoaded("shape", fraction);
   })
   .then(async () => {
-    loaded.shape = 1;
+    setLoaded("shape", 1);
     interaction.prepareHalves();
     idleReady = prepareIdle();
     await idleReady;
-    loaded.prepare = 1;
+    setLoaded("prepare", 1);
+    // The live peach picks up the still's squash, and gulps pause while the two cross over.
+    interaction.squash.x = fill.squash;
+    interaction.squashVelocity.x = fill.squashVel;
+    interaction.squashAxis.set(0, 1);
+    fillWorker?.postMessage({ quiet: HANDOVER_QUIET });
+    mainGulp?.holdGulps(HANDOVER_QUIET);
     group.visible = true;
     intro.classList.add("has-shape");
-    setStatus("Ripening");
+    sayWords(LOADING_WORDS.ripen);
     setTimeout(() => {
-      interaction.holdStill = false;
       stillGone = true;
       fillWorker?.postMessage({ stop: true });
+      introShape.classList.remove("is-filling");
     }, SHAPE_FADE_MS);
     const ripe = new Promise((resolve) => {
       onRipe = resolve;
     });
     peach.applySkin(await skinImage);
     peach.planPlant();
-    loaded.skin = 1;
+    setLoaded("skin", 1);
     // Helpers bake from the full skin, so they build during the ripening fill; the tap waits for them.
     const settled = idle
       .settle((fraction) => {
-        loaded.helpers = fraction;
+        setLoaded("helpers", fraction);
       })
       .then(drawEverything);
     await ripe;
     await settled;
     juice.clear();
     loadSounds();
-    keepAudioUnlocked();
 
     const start = async () => {
       if (started) return;
       // The shop panel reserves its space as it appears; the fading intro keeps its place.
       intro.style.padding = getComputedStyle(intro).padding;
       started = true;
+      clearInterval(lineTimer);
       idleActive = true;
       interaction.holdStill = false;
       saveMode(mode);
@@ -577,7 +776,8 @@ peach
       interaction.bottle.screen.x -= 220;
     };
 
-    setStatus(readyText());
+    boot.ready();
+    sayWords([readyText()]);
     intro.classList.add("is-ready");
     interaction.nudge(1.4);
     const invite = setInterval(() => {
@@ -585,6 +785,12 @@ peach
       else interaction.nudge(0.35);
     }, 3500);
     startGame = start;
+  })
+  .catch((error) => {
+    // eslint-disable-next-line no-console
+    console.error("Peachy keen failed to load:", error);
+    clearInterval(lineTimer);
+    boot.fail();
   });
 
 const SHADOW_HOLD = 1.5;
@@ -618,7 +824,8 @@ const frameClip = () => {
   const shown = Math.min(h, sheet.top + CLIP_MARGIN);
   return clipBox.set(0, h - shown, w, shown);
 };
-renderer.setAnimationLoop(() => {
+let frameFailed = false;
+function frame() {
   if (warming) return;
   const shop = idle?.shop() ?? 0;
   quality.setCap(shop > 1 ? quality.max * FULL_SHEET_RESOLUTION : undefined);
@@ -645,8 +852,9 @@ renderer.setAnimationLoop(() => {
   } else skipFrame = false;
   const realDelta = Math.min(clock.getDelta(), 1 / 20);
   jiggleText?.update(realDelta);
+  if (!started || intro.isConnected) showRipeness(realDelta);
+  finishRipening();
   if (!started || intro.isConnected) {
-    showRipeness(realDelta);
     introTitle.update(realDelta);
     statusJiggle.update(realDelta);
   }
@@ -666,6 +874,7 @@ renderer.setAnimationLoop(() => {
   peach.breeze = interaction.swayAmount;
   peach.update(delta, interaction.heat / 100);
   backdrop.update(delta, interaction.heat / 100);
+  ui.cursor.classList.toggle("is-tag", privacyTag.hovered);
   const spots = [privacyTag.spot()];
   if (interaction.bottle.view.group.visible) {
     const { x, y, size } = interaction.bottle.homeBox();
@@ -690,7 +899,22 @@ renderer.setAnimationLoop(() => {
   lens.render([juice, droplets], clip);
   shock.render();
   if (clip) renderer.setScissorTest(false);
+}
+// three stops asking for frames once one throws, which freezes the game.
+renderer.setAnimationLoop(() => {
+  try {
+    frame();
+  } catch (error) {
+    if (!frameFailed) {
+      // eslint-disable-next-line no-console
+      console.error("Peachy keen frame failed:", error);
+      frameFailed = true;
+    }
+    if (!started) boot.fail();
+  }
 });
+
+boot.booted();
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {

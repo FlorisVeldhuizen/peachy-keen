@@ -42,13 +42,22 @@ export class TrophiesView {
       b.addEventListener("pointerenter", show);
       b.addEventListener("focus", show);
       b.addEventListener("click", show);
+      b.addEventListener("animationend", (e) => {
+        if (e.animationName === "trophy-soak") b.classList.remove("is-seen");
+      });
       return { t, b };
     });
     this.shown = -1;
   }
 
   show(t, anchor) {
-    const got = this.game.state.achievements.includes(t.id);
+    const { achievements, trophiesRead } = this.game.state;
+    const got = achievements.includes(t.id);
+    if (got && !trophiesRead.includes(t.id)) {
+      trophiesRead.push(t.id);
+      toggle(anchor, "is-new", false);
+      anchor.classList.add("is-seen");
+    }
     setDetail(this.detail, got ? t.name : "Locked", [t.about]);
     floatBeside(this.detail, anchor);
   }
@@ -85,13 +94,15 @@ export class TrophiesView {
 
   update() {
     this.updateNear();
-    const { achievements } = this.game.state;
+    const { achievements, trophiesRead } = this.game.state;
     if (achievements.length === this.shown) return;
     this.shown = achievements.length;
     const owned = new Set(achievements);
+    const read = new Set(trophiesRead);
     this.cells.forEach(({ t, b }) => {
       const got = owned.has(t.id);
       b.classList.toggle("is-unlocked", got);
+      toggle(b, "is-new", got && !read.has(t.id));
       b.setAttribute("aria-label", got ? t.name : `Locked trophy`);
     });
     const per = 0.01 + this.game.model.blushPer;

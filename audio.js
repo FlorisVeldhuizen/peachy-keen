@@ -15,6 +15,7 @@ const pats = [];
 const skinBodies = [];
 const coinSkins = [];
 const coinClinks = [];
+const coinWhooshes = [];
 const lastPlayed = new Map();
 let burst = null;
 let massageBank = null;
@@ -758,6 +759,24 @@ export function playCoinClink(volume, pan) {
   });
 }
 
+export function playCoinWhoosh(volume, fromPan, toPan, flight) {
+  if (!running() || !coinWhooshes.length) return;
+  const now = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = pickPat(coinWhooshes, Math.random(), 99);
+  src.playbackRate.value = vary(0.033);
+  const gain = ctx.createGain();
+  gain.gain.value = volume * vary(0.2);
+  const soften = ctx.createBiquadFilter();
+  soften.type = "lowpass";
+  soften.frequency.value = 9000;
+  const panner = ctx.createStereoPanner();
+  panner.pan.setValueAtTime(fromPan, now);
+  panner.pan.linearRampToValueAtTime(toPan, now + flight);
+  src.connect(soften).connect(gain).connect(panner).connect(master);
+  src.start(now);
+}
+
 export function playWobble(
   strength,
   swingSeconds,
@@ -1206,6 +1225,8 @@ const LOOP_SECONDS = LOOP_STEPS * STEP;
 const SWING = 0.18;
 const DISCO_LOOKAHEAD = 0.3;
 export const DISCO_FADE = 2.8;
+// Matches the disco lights' fade-in time constant in wild.js.
+const DISCO_RISE = 0.5;
 const DISCO_LEVEL = 0.42;
 const MUFFLE_OPEN = 20000;
 const MUFFLE_CLOSED = 220;
@@ -1803,7 +1824,8 @@ export function startDisco() {
   }
   context();
   const bus = ctx.createGain();
-  bus.gain.value = DISCO_LEVEL;
+  bus.gain.value = 0;
+  bus.gain.setTargetAtTime(DISCO_LEVEL, ctx.currentTime, DISCO_RISE);
   const muffle = ctx.createBiquadFilter();
   muffle.type = "lowpass";
   muffle.frequency.value = MUFFLE_OPEN;
@@ -1887,6 +1909,7 @@ export function loadSounds() {
       [AUDIO_CONFIG.skinBodySounds, skinBodies],
       [AUDIO_CONFIG.coinSkinSounds, coinSkins],
       [AUDIO_CONFIG.coinClinkSounds, coinClinks],
+      [AUDIO_CONFIG.coinWhooshSounds, coinWhooshes],
     ];
     loading = Promise.all([
       ...sets.map(([urls, buffers]) =>
@@ -1936,7 +1959,14 @@ function rebuildContext() {
 function unlockAudio() {
   if (stalled || ctx?.state === "closed") rebuildContext();
   const c = context();
-  if (c.state !== "running") c.resume().catch(() => {});
+  if (c.state !== "running") {
+    c.resume().catch(() => {});
+    // iOS only finishes starting its audio once a sound starts inside the touch itself.
+    const silence = c.createBufferSource();
+    silence.buffer = c.createBuffer(1, 1, c.sampleRate);
+    silence.connect(c.destination);
+    silence.start();
+  }
   loadSounds();
 }
 

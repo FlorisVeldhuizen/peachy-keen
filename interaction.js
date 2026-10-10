@@ -495,8 +495,8 @@ export class Interaction {
   }
 
   snapOn() {
-    this.wobbleAll(0.08);
-    this.squashVelocity.x += 1.24;
+    this.wobbleAll(0.05);
+    this.squashVelocity.x += 0.8;
     this.squashAxis.set(0, 1);
     playSettle();
     buzz(22);
@@ -1308,7 +1308,7 @@ export class Interaction {
       this.peach.setLingerie(false, 0, 0);
       return;
     }
-    if (g.worn && g.dressing) this.updateDressing(delta);
+    if (g.worn && g.dressing && !this.holdStill) this.updateDressing(delta);
     const steps = Math.ceil(delta / PHYSICS_CONFIG.SUBSTEP);
     const h = delta / steps;
     for (let i = 0; i < steps; i += 1) {
@@ -2164,7 +2164,12 @@ export class Interaction {
     const p = this.pointer;
     const held =
       !this.carrying &&
-      (this.grab || this.recoil || (p.pressed && p.downOnPeach && !p.rubbing));
+      (this.grab ||
+        this.recoil ||
+        (p.pressed &&
+          p.downOnPeach &&
+          !p.rubbing &&
+          this.toolName !== "coins"));
     // Holding still eases the sway back to the rest pose; letting go grows it again over two seconds.
     this.swayWake = this.holdStill
       ? Math.max(0, this.swayWake - delta / 0.4)

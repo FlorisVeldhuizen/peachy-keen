@@ -115,7 +115,7 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 0.8s ease;
+  transition: opacity 1.6s ease-in-out;
 }
 
 #stage.is-drawn {
@@ -521,7 +521,12 @@ button:focus-visible {
   translate: -50% -50%;
   background: url("/peachy-keen/intro-peach.webp") center / 100% 100% no-repeat;
   pointer-events: none;
+  opacity: 0;
   transition: opacity 0.35s ease;
+}
+
+.intro-shape.is-shown {
+  opacity: 1;
 }
 
 .intro-shape.is-settling {
@@ -535,6 +540,11 @@ button:focus-visible {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* The fill canvas draws the grey peach itself, so it can squash with each gulp. */
+.intro-shape.is-filling {
+  background-image: none;
 }
 
 .intro.has-shape .intro-shape {
@@ -638,6 +648,47 @@ button:focus-visible {
   .status-letter {
     animation: none !important;
   }
+}
+
+.intro.is-stuck {
+  cursor: default;
+}
+
+.intro.is-stuck .intro-modes {
+  display: none;
+}
+
+.intro-help {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  animation: help-in 0.5s ease-out;
+}
+
+.intro-help[hidden] {
+  display: none;
+}
+
+@keyframes help-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.intro-help p {
+  max-width: 30ch;
+  margin: 0;
+  color: var(--blush-dim);
+  font-size: 15px;
+}
+
+.intro-help button {
+  padding: 8px 22px;
+  border: 1px solid var(--blush);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--blush);
+  font-size: 16px;
 }
 
 .intro-modes {
@@ -1051,4 +1102,14 @@ button:focus-visible {
   .cursor[data-buzzing="true"] span {
     animation: none;
   }
+}
+
+.cursor.is-tag span {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-width: 1.5px;
+  border-color: var(--peach);
+  border-radius: 50%;
+  background-color: rgba(255, 168, 119, 0.3);
 }
