@@ -2957,12 +2957,6 @@ body.is-storm .buff-glow {
     bottom: calc(
       var(--gutter) + env(safe-area-inset-bottom) + var(--sheet-shown, 0) * 76px
     );
-    transition: opacity 0.15s ease 0.1s;
-  }
-
-  .is-shopping .hints {
-    opacity: 0;
-    transition: opacity 0.15s ease;
   }
 
   .panel:not(.is-open, .is-dragging) .panel-body {
