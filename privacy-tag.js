@@ -79,6 +79,9 @@ const KNOCK_GAP = 0.15;
 const TAUT_AT = 0.98;
 const SNAP_SPEED = [250, 1500];
 const SWISH_SPEED = [400, 1800];
+const SHAKE_KICK = 700;
+const SHAKE_GAP = 0.09;
+const MAX_SHAKE = 3;
 const SHEET_SCALE = 0.72;
 const SIZE = [44, 134, 6];
 const PIVOT = SIZE[0] * 0.42;
@@ -317,6 +320,7 @@ export class PrivacyTag {
     this.drag = null;
     this.time = 0;
     this.knockAt = -1;
+    this.shookAt = -1;
     this.heard = null;
     this.heardReach = 0;
     this.taut = true;
@@ -698,6 +702,24 @@ export class PrivacyTag {
     if (caught === d.caught) return;
     d.caught = caught;
     this.knock(caught ? 1 : 0.4);
+  }
+
+  // A phone shake swings the tag the same way it jolts the peach; the end moves most, like a cord flicked at the top.
+  shake(x, y) {
+    const shown = this.state === "on" || this.state === "idle";
+    if (!shown || this.drag?.holding || this.time - this.shookAt < SHAKE_GAP)
+      return;
+    this.shookAt = this.time;
+    const cap = (v) => Math.max(-MAX_SHAKE, Math.min(MAX_SHAKE, v));
+    const k =
+      SHAKE_KICK * this.scale * STEP * (this.state === "on" ? 1 : TUCKED_SWAY);
+    this.points.forEach(({ old, w }, n) => {
+      if (!w) return;
+      /* eslint-disable no-param-reassign */
+      old.x -= cap(x) * k * (n / LINKS);
+      old.y += cap(y) * k * (n / LINKS);
+      /* eslint-enable no-param-reassign */
+    });
   }
 
   // One knock per jolt: the catch, a yank and the cord going taut often land together.

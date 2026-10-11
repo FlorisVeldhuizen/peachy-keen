@@ -222,6 +222,7 @@ const interaction = new Interaction({
   settings,
   talk,
 });
+interaction.onShake = (x, y) => privacyTag.shake(x, y);
 interaction.bottle.view.group.visible = false;
 const naughty = new Naughty(interaction, talk);
 const wild = new Wild({

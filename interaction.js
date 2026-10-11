@@ -340,6 +340,7 @@ export class Interaction {
       const a = e.acceleration;
       if (!a || Math.hypot(a.x || 0, a.y || 0) < 7) return;
       this.jolt(-(a.x || 0) / 7, (a.y || 0) / 7);
+      this.onShake?.(-(a.x || 0) / 7, (a.y || 0) / 7);
     });
   }
 
