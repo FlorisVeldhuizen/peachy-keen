@@ -122,6 +122,19 @@ button:focus-visible {
   opacity: 1;
 }
 
+.stage-cover {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: opacity 0.3s ease-out;
+}
+
+.stage-cover.is-leaving {
+  opacity: 0;
+}
+
 /* The fill canvas keeps its last frame once the worker stops, so the ripe render stands in. */
 .intro.is-ready .intro-shape {
   background-image: url("/peachy-keen/intro-peach-ripe.webp");
@@ -869,6 +882,14 @@ button:focus-visible {
 
 .bottle.is-carried {
   pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .bottle::before {
+    content: "";
+    position: absolute;
+    inset: -16px;
+  }
 }
 
 .bottle-stream {

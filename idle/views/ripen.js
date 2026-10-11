@@ -8,6 +8,8 @@ import {
   setDetail,
   clearOnLeave,
   floatBeside,
+  revealAbove,
+  sidePanel,
 } from "../dom";
 import { iconSvg } from "../icons";
 import { format, formatTime } from "../numbers";
@@ -117,6 +119,7 @@ export class RipenView {
       });
       b.addEventListener("click", () => {
         this.select(node.id);
+        if (!sidePanel.matches) revealAbove(b, this.card);
         if (!press || press.type === "mouse" || press.armed) this.buy(node.id);
         press = null;
       });

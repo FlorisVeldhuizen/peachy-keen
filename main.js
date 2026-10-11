@@ -29,6 +29,7 @@ import JiggleText from "./jiggle-text";
 import slideToggle from "./slide-toggle";
 import Gulp from "./fill-wave";
 import IntroGlow from "./intro-glow";
+import createStageCover from "./stage-cover";
 
 const MODE_KEY = "peachy-keen-mode";
 const MODES = ["idle", "free"];
@@ -587,6 +588,22 @@ async function warmLights(shown) {
   onWarmed?.();
 }
 
+// Helpers built after the first fade warm-up still need their faded shaders; each light state is one task, so no faded frame shows.
+async function warmFadedHelpers() {
+  const states = [...warmedLights];
+  for (let i = 0; i < states.length; i += 1) {
+    const n = states[i];
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise(requestAnimationFrame);
+    // eslint-disable-next-line no-await-in-loop
+    await idle.warmFade(() => {
+      showLights(lightGroups.map((_, g) => Math.floor(n / 2 ** g) % 2 === 1));
+      drawEverything();
+      showLitGroups();
+    });
+  }
+}
+
 async function warm(extra = warmExtra) {
   warmExtra = extra;
   warmedLights.clear();
@@ -604,11 +621,6 @@ async function warm(extra = warmExtra) {
 }
 
 let warming = false;
-renderer.domElement.addEventListener("webglcontextrestored", async () => {
-  warming = true;
-  await warm();
-  warming = false;
-});
 
 // Building the shop and compiling its shaders freezes the page, so it happens before the tap.
 async function prepareIdle() {
@@ -747,6 +759,7 @@ peach
       .settle((fraction) => {
         setLoaded("helpers", fraction);
       })
+      .then(warmFadedHelpers)
       .then(drawEverything);
     await ripe;
     await settled;
@@ -829,6 +842,20 @@ const frameClip = () => {
   const shown = Math.min(h, sheet.top + CLIP_MARGIN);
   return clipBox.set(0, h - shown, w, shown);
 };
+function drawStage() {
+  const clip = idle?.shop() ? frameClip() : null;
+  backdrop.render(clip);
+  lens.render([juice, droplets], clip);
+  shock.render();
+  if (clip) renderer.setScissorTest(false);
+}
+const stageCover = createStageCover(renderer, drawStage);
+renderer.domElement.addEventListener("webglcontextrestored", async () => {
+  warming = true;
+  await warm();
+  warming = false;
+  requestAnimationFrame(() => requestAnimationFrame(stageCover.release));
+});
 let frameFailed = false;
 function frame() {
   if (warming) return;
@@ -897,13 +924,9 @@ function frame() {
   lens.update(delta);
   skinRings.update(delta);
   shock.update(realDelta);
-  const clip = shop ? frameClip() : null;
-  backdrop.render(clip);
+  drawStage();
   if (!renderer.domElement.classList.contains("is-drawn"))
     requestAnimationFrame(() => renderer.domElement.classList.add("is-drawn"));
-  lens.render([juice, droplets], clip);
-  shock.render();
-  if (clip) renderer.setScissorTest(false);
 }
 // three stops asking for frames once one throws, which freezes the game.
 renderer.setAnimationLoop(() => {

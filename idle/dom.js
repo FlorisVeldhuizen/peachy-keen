@@ -47,6 +47,34 @@ export function floatBeside(detail, anchor) {
   detail.style.top = `${Math.round(top)}px`;
 }
 
+const REVEAL_GAP = 10;
+
+function scrollPanel(node, by) {
+  if (by <= 0) return;
+  node.closest(".panel-body").scrollBy({
+    top: by,
+    behavior: reducedMotion.matches ? "auto" : "smooth",
+  });
+}
+
+export function revealAbove(anchor, card) {
+  scrollPanel(
+    anchor,
+    anchor.getBoundingClientRect().bottom +
+      REVEAL_GAP -
+      card.getBoundingClientRect().top,
+  );
+}
+
+export function revealWhole(card) {
+  scrollPanel(
+    card,
+    card.getBoundingClientRect().bottom +
+      REVEAL_GAP -
+      card.closest(".panel-body").getBoundingClientRect().bottom,
+  );
+}
+
 export function clearOnLeave(area, detail, onClear) {
   const clear = () => {
     onClear?.();

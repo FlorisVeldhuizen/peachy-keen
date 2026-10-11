@@ -1,4 +1,5 @@
 import { Euler, Quaternion, Vector3 } from "three";
+import { sheet } from "../../../../util";
 
 const MARGIN = 10;
 
@@ -13,8 +14,7 @@ export default function createFrame(ctx) {
   const goal = { ...safe };
   let first = true;
 
-  const cache = { width: 1, height: 1, scoreBottom: 0, side: 0, bottom: 0 };
-  const root = document.documentElement;
+  const cache = { width: 1, height: 1, scoreBottom: 0 };
   const readBox = () => {
     const box = canvas.getBoundingClientRect();
     cache.width = box.width;
@@ -23,23 +23,14 @@ export default function createFrame(ctx) {
     const s = score?.getBoundingClientRect();
     cache.scoreBottom = s && s.height > 0 ? s.bottom - box.top : 0;
   };
-  const readPanel = () => {
-    cache.side = parseFloat(root.style.getPropertyValue("--panel-side")) || 0;
-    cache.bottom =
-      parseFloat(root.style.getPropertyValue("--panel-bottom")) || 0;
-  };
   readBox();
-  readPanel();
   const sizes = new ResizeObserver(readBox);
   sizes.observe(canvas);
   const score = document.querySelector(".score");
   if (score) sizes.observe(score);
-  const panel = new MutationObserver(readPanel);
-  panel.observe(root, { attributes: true, attributeFilter: ["style"] });
   window.addEventListener("resize", readBox);
   ctx.onDispose(() => {
     sizes.disconnect();
-    panel.disconnect();
     window.removeEventListener("resize", readBox);
   });
 
@@ -48,9 +39,9 @@ export default function createFrame(ctx) {
     let b = cache.height;
     const t = Math.max(MARGIN, cache.scoreBottom ? cache.scoreBottom + 6 : 0);
     let stageBottom = b;
-    if (cache.bottom > 0 && cache.bottom < b * 0.7)
-      stageBottom = b - cache.bottom;
-    else if (cache.side > 0) r = Math.min(r, cache.width - cache.side);
+    if (sheet.bottom > 0 && sheet.bottom < b * 0.7)
+      stageBottom = b - sheet.bottom;
+    else if (sheet.side > 0) r = Math.min(r, cache.width - sheet.side);
     b = stageBottom - MARGIN;
     r -= MARGIN;
     Object.assign(goal, {

@@ -84,7 +84,7 @@ export const viewHeight = () => viewportHeight;
 // Reading innerWidth forces a layout, so frame code reads this copy.
 export const viewWidth = () => viewportWidth;
 
-export const sheet = { top: null, side: 0, moved: 0 };
+export const sheet = { top: null, side: 0, bottom: 0, moved: 0 };
 
 // Lights that switch off together when unlit: mood lights, disco lights, the golden peach glow.
 export const lightGroups = [];

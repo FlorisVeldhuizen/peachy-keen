@@ -35,6 +35,9 @@ function landFlier(f) {
 export class Hud {
   constructor(game) {
     this.game = game;
+    this.glow = Object.assign(document.createElement("div"), {
+      className: "buff-glow",
+    });
     this.count = new RollingNumber(document.getElementById("count"));
     this.drop = new SyrupDrop(document.getElementById("count-unit"));
     this.rate = document.getElementById("rate");
@@ -83,6 +86,8 @@ export class Hud {
       row.innerHTML = `<span>${name}</span><i><b></b></i>`;
       this.buffRows.set(b, row.querySelector("b"));
     });
+    // Last in the page, so the glow covers everything added after it.
+    document.body.append(this.glow);
     document.body.classList.toggle(
       "is-frenzy",
       this.game.state.buffs.some((b) => b.id === "frenzy"),

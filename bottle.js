@@ -18,6 +18,7 @@ const PEACH_HEIGHT = 3.2;
 const HEIGHT_TO_PEACH = 0.28;
 const WIDTH_TO_HEIGHT = 0.52;
 const HINT_GAP_PX = 16;
+const MIN_HEIGHT_PX = 64;
 const CATCH_PX = 48;
 const BASE_Y = -0.5;
 const SQUASH_PER_GROWTH = 0.012;
@@ -82,7 +83,7 @@ class ModelView {
     const peachPx =
       (PEACH_HEIGHT * viewHeight()) /
       (2 * this.camera.userData.baseZ * Math.tan(halfFov));
-    return peachPx * HEIGHT_TO_PEACH;
+    return Math.max(MIN_HEIGHT_PX, peachPx * HEIGHT_TO_PEACH);
   }
 
   pixelSize() {

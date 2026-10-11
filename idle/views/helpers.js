@@ -6,6 +6,7 @@ import {
   floatBeside,
   clearOnLeave,
   inspectOn,
+  revealWhole,
   sidePanel,
   toggle,
   keepFocus,
@@ -257,6 +258,7 @@ export class HelpersView {
     this.focused = id;
     this.pinned = true;
     this.showDetail();
+    if (!sidePanel.matches) revealWhole(this.detail);
   }
 
   showDetail() {

@@ -114,7 +114,7 @@ export class Privacy {
     if (on) {
       this.shopReturn = 0;
       this.shopWasOpen = panel.open;
-      panel.setOpen(false);
+      panel.setOpen(false, false, true);
       this.tag.hang();
       this.room.wind.blast(this.room.i.group.position, 3);
     } else {
@@ -206,7 +206,7 @@ export class Privacy {
     if (on !== this.shown) this.show(on);
     if (this.shopReturn > 0) {
       this.shopReturn -= delta;
-      if (this.shopReturn <= 0) panel.setOpen(true);
+      if (this.shopReturn <= 0) panel.setOpen(true, false, true);
     }
     this.away += ((on ? 1 : 0) - this.away) * ease(on ? 2.2 : 0.9, delta);
     this.room.snap = this.away > 0.5;

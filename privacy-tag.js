@@ -23,7 +23,7 @@ import {
   Vector3,
 } from "three";
 import { reducedMotion, viewHeight, viewWidth } from "./util";
-import { playCord } from "./audio";
+import { playCord, playCordFlick, playCordSwish } from "./audio";
 import { sidePanel } from "./idle/dom";
 
 const DEPTH = 2.2;
@@ -75,6 +75,10 @@ const CORD_KEEP = 0.975;
 const STRETCH_EASE = 10;
 const DROP_ROCK = 3;
 const DROP_KEEP = 0.35;
+const KNOCK_GAP = 0.15;
+const TAUT_AT = 0.98;
+const SNAP_SPEED = [250, 1500];
+const SWISH_SPEED = [400, 1800];
 const SHEET_SCALE = 0.72;
 const SIZE = [44, 134, 6];
 const PIVOT = SIZE[0] * 0.42;
@@ -312,6 +316,11 @@ export class PrivacyTag {
     this.goal = null;
     this.drag = null;
     this.time = 0;
+    this.knockAt = -1;
+    this.heard = null;
+    this.heardReach = 0;
+    this.taut = true;
+    this.swishing = false;
     this.pending = 0;
     this.gust = 0;
     this.finger = null;
@@ -581,10 +590,11 @@ export class PrivacyTag {
     this.lengthV = 0;
     this.segment = on / LINKS;
     this.body.pitchV += DROP_ROCK * (Math.random() < 0.5 ? -1 : 1);
-    playCord(false);
+    this.knock(1);
   }
 
   raise() {
+    if (this.state === "on" && this.owned) playCordFlick();
     this.falling = false;
     if (this.state === "on") this.state = "idle";
   }
@@ -687,7 +697,42 @@ export class PrivacyTag {
     const d = this.drag;
     if (caught === d.caught) return;
     d.caught = caught;
-    playCord(false, caught ? 1 : 0.4);
+    this.knock(caught ? 1 : 0.4);
+  }
+
+  // One knock per jolt: the catch, a yank and the cord going taut often land together.
+  knock(volume) {
+    if (this.time - this.knockAt < KNOCK_GAP) return;
+    this.knockAt = this.time;
+    playCord(volume);
+  }
+
+  // A hanging tag knocks when its cord snaps taut and swishes when it swings fast.
+  listen(delta) {
+    if (!delta) return;
+    const end = this.points[LINKS].p;
+    const reach = end.distanceTo(this.anchor);
+    this.heard ??= end.clone();
+    const speed = end.distanceTo(this.heard) / delta;
+    const outward = (reach - this.heardReach) / delta;
+    this.heard.copy(end);
+    this.heardReach = reach;
+    if (this.state !== "on" || this.falling) {
+      this.taut = true;
+      this.swishing = false;
+      return;
+    }
+    const k = this.scale;
+    const taut = reach > this.segment * LINKS * TAUT_AT;
+    if (taut && !this.taut && outward > SNAP_SPEED[0] * k)
+      this.knock(Math.min(1, outward / (SNAP_SPEED[1] * k)));
+    this.taut = taut;
+    const fast = speed > SWISH_SPEED[0] * k;
+    if (fast && !this.swishing) {
+      const pan = Math.max(-1, Math.min(1, (end.x / viewWidth()) * 2 - 1));
+      playCordSwish(Math.min(1, speed / (SWISH_SPEED[1] * k)), pan * 0.6);
+    }
+    this.swishing = fast || (this.swishing && speed > SWISH_SPEED[0] * k * 0.6);
   }
 
   // The pointer brushes past: each part gets one small nudge as the pointer reaches it, never a pull, so it cannot stick.
@@ -772,13 +817,13 @@ export class PrivacyTag {
     if (this.state === "idle") {
       const tugged = this.length - d.length > IDLE_TUG * this.scale;
       if (d.caught || tugged || vy > IDLE_FLICK) {
-        playCord(true);
+        this.knock(1);
         this.pull();
       }
       return;
     }
     if (d.caught) {
-      playCord(true);
+      this.knock(1);
       this.lengthV = -TUG_SNAP;
       this.takeDown();
       return;
@@ -1135,6 +1180,7 @@ export class PrivacyTag {
       else this.simulate(STEP, wind);
     }
     this.stepTurn(delta);
+    this.listen(delta);
 
     const alpha = this.pending / STEP;
     const mix = (key) =>

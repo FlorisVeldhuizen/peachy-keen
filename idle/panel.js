@@ -10,6 +10,10 @@ import { StatsView } from "./views/stats";
 import { OptionsView } from "./views/options";
 import tabMotion from "./tab-motion";
 import splashDrop from "./drop-splash";
+import TabSwipe from "./tab-swipe";
+
+// Longer than the CSS glide, so the calm camera spring also covers the settle.
+const GLIDE_MS = 1400;
 
 const TABS = [
   ["helpers", "Helpers", "hand"],
@@ -137,9 +141,8 @@ export class Panel {
     this.tabs.setAttribute("role", "tablist");
     this.tabs.setAttribute("aria-label", "Shop");
     this.body = el("div", "panel-body", this.root);
-    const titleRow = el("div", "panel-title-row", this.body);
-    this.title = el("h2", "panel-title", titleRow);
     this.sections = {};
+    const titleRows = {};
     this.buttons = {};
     this.scrolls = {};
     this.tabs.addEventListener("keydown", (e) => this.moveTab(e));
@@ -159,17 +162,21 @@ export class Panel {
       b.title = label;
       b.id = `tab-${id}`;
       b.addEventListener("click", () => {
-        if (this.open && id === this.current && !sidePanel.matches)
-          this.setOpen(false);
-        else this.show(id, true);
+        if (sidePanel.matches || !this.open) this.show(id, true);
+        else if (id === this.current) this.setOpen(false);
+        else this.swipe.slideTo(id);
       });
       this.buttons[id] = b;
       const section = el("section", `tab-panel tab-${id}`, this.body);
       section.setAttribute("role", "tabpanel");
       section.setAttribute("aria-labelledby", b.id);
       section.hidden = true;
+      titleRows[id] = el("div", "panel-title-row", section);
+      el("h2", "panel-title", titleRows[id], label);
       this.sections[id] = section;
     });
+    this.marker = el("i", "tab-marker", this.tabs, "<b></b>");
+    new ResizeObserver(() => this.placeMarker(this.current)).observe(this.tabs);
     const confirm = (options) => modal.confirm(options);
     this.views = {
       helpers: new HelpersView(game, this.sections.helpers),
@@ -180,9 +187,10 @@ export class Panel {
       stats: new StatsView(game, this.sections.stats),
       options: new OptionsView(game, this.sections.options, settings, confirm),
     };
-    Object.values(this.views).forEach((view) => {
-      if (view.titleTool) titleRow.append(view.titleTool);
+    Object.entries(this.views).forEach(([id, view]) => {
+      if (view.titleTool) titleRows[id].append(view.titleTool);
     });
+    this.swipe = new TabSwipe(this);
     this.settings = settings;
     this.timer = 0;
     this.open = sidePanel.matches;
@@ -216,8 +224,16 @@ export class Panel {
     });
   }
 
-  setOpen(open, full = false) {
+  // A mode switch glides the sheet slowly, so the peach eases over instead of jumping.
+  setOpen(open, full = false, glide = false) {
     this.open = open;
+    clearTimeout(this.glideTimer);
+    this.root.classList.toggle("is-gliding", glide);
+    if (glide)
+      this.glideTimer = setTimeout(
+        () => this.root.classList.remove("is-gliding"),
+        GLIDE_MS,
+      );
     this.root.classList.toggle("is-open", open);
     this.root.classList.toggle("is-full", open && full);
     document.body.classList.toggle("is-shopping", open);
@@ -227,6 +243,11 @@ export class Panel {
     this.collapse.setAttribute("aria-expanded", String(open));
     this.collapse.setAttribute("aria-label", label);
     this.collapse.title = label;
+    if (open) this.swipe.schedule();
+  }
+
+  get gliding() {
+    return this.root.classList.contains("is-gliding");
   }
 
   // The layout measures the panel every frame, so the peach reframes in step with the slide.
@@ -357,29 +378,63 @@ export class Panel {
     this.buttons[next].focus();
   }
 
+  shownTabs() {
+    return TABS.map(([id]) => id).filter((id) => !this.buttons[id].hidden);
+  }
+
   show(id, fromTap = false) {
     if (this.current) this.scrolls[this.current] = this.body.scrollTop;
     if (this.current && (id !== this.current || fromTap)) this.celebrate(id);
-    if (this.current && id !== this.current) this.views[this.current].leave?.();
-    this.current = id;
+    this.swipe.drop();
     Object.entries(this.sections).forEach(([key, section]) => {
       // eslint-disable-next-line no-param-reassign
       section.hidden = key !== id;
-      this.buttons[key].setAttribute("aria-selected", String(key === id));
-      this.buttons[key].tabIndex = key === id ? 0 : -1;
-      const tool = this.views[key].titleTool;
-      if (tool) tool.hidden = key !== id;
     });
+    this.select(id);
     this.body.scrollTop = this.scrolls[id] || 0;
-    setText(this.title, TABS.find(([key]) => key === id)[1]);
-    this.settings.visible = id === "options";
     if (fromTap && !this.open) this.setOpen(true);
+    else this.swipe.schedule();
+  }
+
+  select(id) {
+    if (this.current && id !== this.current) this.views[this.current].leave?.();
+    this.current = id;
+    Object.entries(this.buttons).forEach(([key, b]) => {
+      b.setAttribute("aria-selected", String(key === id));
+      // eslint-disable-next-line no-param-reassign
+      b.tabIndex = key === id ? 0 : -1;
+    });
+    this.settings.visible = id === "options";
+    this.placeMarker(id);
     try {
       localStorage.setItem(TAB_KEY, id);
     } catch {
       // Tab choice then lasts for this visit only.
     }
     this.timer = 0;
+  }
+
+  measureTabs() {
+    this.tabRects = Object.fromEntries(
+      Object.entries(this.buttons).map(([id, b]) => [
+        id,
+        [b.offsetLeft, b.offsetWidth],
+      ]),
+    );
+  }
+
+  placeMarker(from, to = from, t = 0) {
+    if (!from || sidePanel.matches) return;
+    const rect = (id) =>
+      this.tabRects?.[id] ?? [
+        this.buttons[id].offsetLeft,
+        this.buttons[id].offsetWidth,
+      ];
+    const [fromLeft, fromWidth] = rect(from);
+    const [toLeft, toWidth] = rect(to);
+    const left = fromLeft + (toLeft - fromLeft) * t;
+    const width = fromWidth + (toWidth - fromWidth) * t;
+    this.marker.style.transform = `translateX(${left}px) scaleX(${width})`;
   }
 
   celebrate(id) {
@@ -414,6 +469,12 @@ export class Panel {
     badge("ripen", this.game.ripenReady() ? "!" : 0);
     if (state.orchard.open) badge("orchard", this.views.orchard.badge());
     if (this.buttons[this.current].hidden) this.show("helpers");
+    const shown = this.shownTabs().join();
+    if (shown !== this.shownKey) {
+      this.shownKey = shown;
+      this.placeMarker(this.current);
+      this.swipe.schedule();
+    }
     this.views[this.current].update();
   }
 }

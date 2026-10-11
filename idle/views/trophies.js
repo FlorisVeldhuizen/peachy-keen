@@ -5,6 +5,8 @@ import {
   setDetail,
   clearOnLeave,
   floatBeside,
+  revealAbove,
+  sidePanel,
   toggle,
 } from "../dom";
 import { iconSvg } from "../icons";
@@ -34,7 +36,7 @@ export class TrophiesView {
     this.grid = el("div", "trophies", root);
     this.detail = el("p", "shop-detail is-floating", root);
     this.detail.setAttribute("aria-live", "polite");
-    clearOnLeave(this.grid, this.detail);
+    clearOnLeave(this.grid, this.detail, () => this.pick(null));
     this.cells = TROPHIES.map((t) => {
       const b = el("button", "trophy", this.grid, iconSvg(t.icon || "trophy"));
       b.type = "button";
@@ -60,6 +62,14 @@ export class TrophiesView {
     }
     setDetail(this.detail, got ? t.name : "Locked", [t.about]);
     floatBeside(this.detail, anchor);
+    this.pick(anchor);
+    if (!sidePanel.matches) revealAbove(anchor, this.detail);
+  }
+
+  pick(anchor) {
+    this.picked?.classList.remove("is-picked");
+    anchor?.classList.add("is-picked");
+    this.picked = anchor;
   }
 
   updateNear() {

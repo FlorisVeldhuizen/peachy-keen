@@ -33,6 +33,8 @@ export const FREESOUND_CREDITS = [
   ],
   ["Glugs", [["isbeorn", 553954]]],
   ["Grabs", [["toefur", 288925]]],
+  ["Tag knock", [["arseniiv", 327817]]],
+  ["Tag flick", [["CressieCres", 516830]]],
   [
     "Kisses",
     [

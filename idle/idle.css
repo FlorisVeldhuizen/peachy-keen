@@ -164,8 +164,7 @@
   display: block;
 }
 
-body::after {
-  content: "";
+.buff-glow {
   position: fixed;
   inset: 0 var(--panel-side, 0px) var(--panel-bottom, 0px) 0;
   z-index: 2;
@@ -175,18 +174,18 @@ body::after {
   transition: opacity 0.6s ease;
 }
 
-body.is-frenzy::after {
+body.is-frenzy .buff-glow {
   opacity: 1;
   animation: frenzy 0.9s ease-in-out infinite alternate;
 }
 
-body.is-satisfied::after {
+body.is-satisfied .buff-glow {
   opacity: 1;
   box-shadow: inset 0 0 160px rgba(255, 140, 150, 0.5);
   animation: frenzy 1.4s ease-in-out infinite alternate;
 }
 
-body.is-storm::after {
+body.is-storm .buff-glow {
   opacity: 1;
   box-shadow: inset 0 0 120px rgba(255, 90, 140, 0.5);
   animation: frenzy 0.3s ease-in-out infinite alternate;
@@ -344,6 +343,10 @@ body.is-storm::after {
   display: none;
 }
 
+.tab-marker {
+  display: none;
+}
+
 .shop-head {
   display: flex;
   flex-wrap: wrap;
@@ -496,7 +499,7 @@ body.is-storm::after {
 
 .shop-detail {
   position: sticky;
-  bottom: 0;
+  bottom: 10px;
   display: grid;
   gap: 4px;
   margin-top: 14px;
@@ -1726,9 +1729,9 @@ body.is-storm::after {
   .node-glow::before,
   .node-glow::after,
   .sky-twinkle,
-  body.is-frenzy::after,
-  body.is-satisfied::after,
-  body.is-storm::after {
+  body.is-frenzy .buff-glow,
+  body.is-satisfied .buff-glow,
+  body.is-storm .buff-glow {
     animation: none !important;
   }
 }
@@ -1763,8 +1766,6 @@ body.is-storm::after {
 
 .plots + .shop-detail {
   position: static;
-  align-content: start;
-  min-height: 11.8em;
 }
 
 .ripen-top {
@@ -2149,8 +2150,8 @@ body.is-storm::after {
 
 .near {
   display: grid;
-  gap: 12px;
-  margin: 0 0 18px;
+  gap: 18px;
+  margin: 0 0 32px;
   padding: 0;
   list-style: none;
 }
@@ -2158,8 +2159,8 @@ body.is-storm::after {
 .near-row {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
 }
 
 .near-row.is-empty {
@@ -2167,6 +2168,8 @@ body.is-storm::after {
 }
 
 .near-icon {
+  grid-row: span 2;
+  align-self: center;
   display: grid;
   place-items: center;
   width: 40px;
@@ -2183,9 +2186,7 @@ body.is-storm::after {
 }
 
 .near-main {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
+  display: contents;
 }
 
 .near-head {
@@ -2213,6 +2214,8 @@ body.is-storm::after {
 }
 
 .near-bar {
+  grid-column: 2;
+  margin-top: 4px;
   display: block;
   overflow: hidden;
   height: 3px;
@@ -2243,6 +2246,10 @@ body.is-storm::after {
   border-radius: 10px;
   background: none;
   color: rgba(246, 201, 187, 0.22);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .trophy .icon {
@@ -2250,10 +2257,21 @@ body.is-storm::after {
   height: 19px;
 }
 
+.trophy.is-picked {
+  border-color: var(--blush-dim);
+  background: var(--blush-faint);
+  color: var(--blush-dim);
+}
+
 .trophy.is-unlocked {
   border-color: rgba(212, 162, 76, 0.7);
   background: rgba(212, 162, 76, 0.12);
   color: var(--gold);
+}
+
+.trophy.is-unlocked.is-picked {
+  border-color: var(--gold);
+  background: rgba(212, 162, 76, 0.26);
 }
 
 .trophy.is-new::after {
@@ -2947,10 +2965,6 @@ body.is-storm::after {
     transition: opacity 0.15s ease;
   }
 
-  body:has(.toast-card) .hints {
-    opacity: 0;
-  }
-
   .panel:not(.is-open, .is-dragging) .panel-body {
     visibility: hidden;
     opacity: 0;
@@ -2998,6 +3012,7 @@ body.is-storm::after {
   }
 
   .tabs {
+    position: relative;
     justify-content: space-around;
     padding: 0 6px;
   }
@@ -3007,22 +3022,52 @@ body.is-storm::after {
     border-bottom: 0;
   }
 
-  .tab::before {
-    content: "";
+  .tab-marker {
     position: absolute;
     top: 0;
-    right: 0;
     left: 0;
+    display: block;
+    width: 1px;
     height: 2px;
+    transform-origin: 0 0;
+    pointer-events: none;
+  }
+
+  .tab-marker b {
+    display: block;
+    height: 100%;
     border-radius: 1px;
     background: var(--peach);
     transform: scaleX(0);
     transition: transform 0.2s ease;
   }
 
-  .panel.is-open .tab[aria-selected="true"]::before {
+  .panel.is-open .tab-marker b {
     transform: scaleX(1);
     transition: transform 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) 0.15s;
+  }
+
+  .panel-body {
+    position: relative;
+    overflow-x: hidden;
+    touch-action: pan-y;
+  }
+
+  .tab-panel.is-beside,
+  .tab-panel.is-parked {
+    position: absolute;
+    top: 0;
+    right: 14px;
+    left: 14px;
+  }
+
+  .tab-panel.is-parked {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .is-swiping .tab-panel {
+    will-change: transform;
   }
 
   .toasts {
@@ -3553,4 +3598,9 @@ body.is-dnd:not(.is-shopping) .free-toys {
 
 .credits .shop-note {
   font-size: 13.5px;
+}
+
+.panel.is-gliding {
+  transition-duration: 0.9s;
+  transition-timing-function: cubic-bezier(0.45, 0, 0.25, 1);
 }

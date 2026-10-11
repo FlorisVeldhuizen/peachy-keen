@@ -1,6 +1,9 @@
 import { Spring, clamp, sheet, viewHeight, viewWidth } from "../util";
 import { sidePanel } from "./dom";
 
+const PANEL_VAR_USERS =
+  ".score, .hints, .toasts, .vignette, .mood-light, .intro, .buff-glow";
+
 const FRAME_HEIGHT = 6.4;
 const FRAME_WIDTH = 5.2;
 const OPEN_SHARE = 0.6;
@@ -8,6 +11,7 @@ const TOP_FROM = 0.15;
 const TOP_RAMP = 0.2;
 const SETTLE_FREQUENCY = 17;
 const SETTLE_DAMPING = 0.55;
+const GLIDE_DAMPING = 1;
 const ARRIVE_SECONDS = 1.3;
 
 export class Layout {
@@ -46,6 +50,7 @@ export class Layout {
     this.bottom = wide ? 0 : Math.max(0, viewHeight() - rect.top);
     sheet.top = this.bottom ? rect.top : null;
     sheet.side = this.side;
+    sheet.bottom = this.bottom;
     const h = viewHeight();
     const opened = clamp((this.bottom - h * TOP_FROM) / (h * TOP_RAMP), 0, 1);
     this.top = opened * this.rate.getBoundingClientRect().bottom;
@@ -110,6 +115,10 @@ export class Layout {
       if (this.arrive.t >= 1) this.arrive = null;
     }
     const snap = !delta || this.arrive;
+    const damping = this.panel.gliding ? GLIDE_DAMPING : SETTLE_DAMPING;
+    this.shown.forEach((s) => {
+      s.friction = 2 * damping * SETTLE_FREQUENCY; // eslint-disable-line no-param-reassign
+    });
     const [shownZ, shownX, shownY] = shownTargets.map((t, i) =>
       snap ? this.shown[i].snap(t) : this.shown[i].step(t, delta),
     );
@@ -130,11 +139,14 @@ export class Layout {
     const key = `${Math.round(this.side)}|${Math.round(this.bottom)}`;
     if (key !== this.cssKey) {
       this.cssKey = key;
-      const root = document.documentElement.style;
-      root.setProperty("--panel-side", `${this.side}px`);
-      root.setProperty("--panel-bottom", `${this.bottom}px`);
       const [closed] = this.panel.sheetStops();
-      root.setProperty("--sheet-shown", clamp(this.bottom / closed, 0, 1));
+      const shown = clamp(this.bottom / closed, 0, 1);
+      // Set on the root, these restyle the whole shop every frame the sheet moves.
+      document.querySelectorAll(PANEL_VAR_USERS).forEach(({ style }) => {
+        style.setProperty("--panel-side", `${this.side}px`);
+        style.setProperty("--panel-bottom", `${this.bottom}px`);
+        style.setProperty("--sheet-shown", shown);
+      });
       sheet.moved += 1;
     }
   }

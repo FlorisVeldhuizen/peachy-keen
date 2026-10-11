@@ -8,6 +8,7 @@ import {
   el,
   floatBeside,
   inspectOn,
+  revealWhole,
   setDetail,
   setText,
   sidePanel,
@@ -388,7 +389,10 @@ export class OrchardView {
         bed.src = url;
       });
       b.style.setProperty("--delay", `${-index * 0.83}s`);
-      b.addEventListener("click", () => this.use(index));
+      b.addEventListener("click", () => {
+        this.use(index);
+        if (!sidePanel.matches) revealWhole(this.info);
+      });
       const show = () => {
         this.focus = index;
         this.describePlot(index);

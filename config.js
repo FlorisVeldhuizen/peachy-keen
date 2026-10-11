@@ -282,6 +282,20 @@ export const AUDIO_CONFIG = {
       import: "default",
     }),
   ),
+  woodTapSounds: inNumberOrder(
+    import.meta.glob("./assets/woodtap*.m4a", {
+      eager: true,
+      query: "?url",
+      import: "default",
+    }),
+  ),
+  cordFlickSounds: inNumberOrder(
+    import.meta.glob("./assets/cordflick*.m4a", {
+      eager: true,
+      query: "?url",
+      import: "default",
+    }),
+  ),
   massageBankSound,
   pitchVariationMin: 0.88,
   pitchVariationMax: 1.12,

@@ -15,6 +15,8 @@ const pats = [];
 const skinBodies = [];
 const coinSkins = [];
 const coinClinks = [];
+const woodTaps = [];
+const cordFlicks = [];
 const coinWhooshes = [];
 const lastPlayed = new Map();
 let burst = null;
@@ -777,6 +779,15 @@ export function playCoinWhoosh(volume, fromPan, toPan, flight) {
   src.start(now);
 }
 
+export function playCordSwish(amount, pan) {
+  if (!running() || !coinWhooshes.length) return;
+  patLayer(ctx.currentTime, pickPat(coinWhooshes, amount, 1.5), {
+    volume: (0.04 + amount * 0.1) * vary(0.3),
+    cutoff: (1800 + amount * 2600) * vary(0.3),
+    pan,
+  });
+}
+
 export function playWobble(
   strength,
   swingSeconds,
@@ -1031,25 +1042,46 @@ function snapSlap(amount, crisp) {
   }
 }
 
-// A soft wooden bead knock; letting go adds a short swish of the cord.
-export function playCord(release, volume = 1) {
-  if (!running()) return;
-  const pitch = 0.94 + Math.random() * 0.12;
-  noiseHit(1400 * pitch, 900 * pitch, 0.035, 0.16 * volume, "bandpass", {
-    q: 5,
+export function playCordFlick(volume = 1) {
+  if (!running() || !cordFlicks.length) return;
+  patLayer(ctx.currentTime, pickVariation(cordFlicks), {
+    volume: 0.28 * volume * vary(0.3),
+    cutoff: 5000 * vary(0.6),
+    pan: (Math.random() * 2 - 1) * 0.2,
+    skip: Math.random() * 0.012,
   });
-  tone(ctx.currentTime, {
-    from: (release ? 560 : 720) * pitch,
-    to: (release ? 430 : 560) * pitch,
-    length: 0.07,
-    volume: 0.05 * volume,
-    attack: 0.002,
-  });
-  if (release)
-    noiseHit(2400, 500, 0.14, 0.07 * volume, "bandpass", {
+  noiseHit(
+    2600 * vary(0.4),
+    500 * vary(0.4),
+    0.12 * vary(0.4),
+    0.025 * volume,
+    "bandpass",
+    {
       q: 1.2,
       attack: 0.01,
+    },
+  );
+}
+
+export function playCord(volume = 1) {
+  if (!running() || !woodTaps.length) return;
+  const now = ctx.currentTime;
+  const pan = (Math.random() * 2 - 1) * 0.15;
+  patLayer(now, pickVariation(woodTaps), {
+    volume: 0.3 * volume * vary(0.3),
+    cutoff: 6000 * vary(0.6),
+    pan,
+  });
+  // The tag sometimes ticks the cord again as it settles.
+  if (Math.random() < 0.35)
+    patLayer(now + 0.02 + Math.random() * 0.03, pickVariation(woodTaps), {
+      volume: 0.09 * volume * vary(0.4),
+      cutoff: 2500 * vary(0.4),
+      pan: pan * 1.5,
     });
+  noiseHit(2200 * vary(0.4), 700, 0.06 * vary(0.5), 0.02 * volume, "bandpass", {
+    q: 0.8,
+  });
 }
 
 export function playSnap(amount, crisp = false) {
@@ -1910,6 +1942,8 @@ export function loadSounds() {
       [AUDIO_CONFIG.coinSkinSounds, coinSkins],
       [AUDIO_CONFIG.coinClinkSounds, coinClinks],
       [AUDIO_CONFIG.coinWhooshSounds, coinWhooshes],
+      [AUDIO_CONFIG.woodTapSounds, woodTaps],
+      [AUDIO_CONFIG.cordFlickSounds, cordFlicks],
     ];
     loading = Promise.all([
       ...sets.map(([urls, buffers]) =>
